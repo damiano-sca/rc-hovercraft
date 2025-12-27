@@ -1,6 +1,7 @@
 package com.example.hovercraftcontroller.ui.scan
 
 import android.annotation.SuppressLint
+import android.Manifest
 import android.app.Application
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
@@ -12,6 +13,9 @@ import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
@@ -162,7 +166,16 @@ class ScanConnectViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun addOrUpdateDevice(result: ScanResult) {
+        if (!hasBluetoothScanPermission()) {
+            setError("Bluetooth scan permission is missing.")
+            return
+        }
+        if (!hasBluetoothConnectPermission()) {
+            setError("Bluetooth connect permission is missing.")
+            return
+        }
         val device = result.device ?: return
         val name = device.name ?: "Unknown"
         val bleDevice = BleDevice(
@@ -176,7 +189,15 @@ class ScanConnectViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
+        @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+            if (!hasBluetoothConnectPermission()) {
+                setError("Bluetooth connect permission is missing.")
+                currentGatt?.close()
+                currentGatt = null
+                _uiState.update { it.copy(connectionState = ConnectionState.Disconnected) }
+                return
+            }
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     _uiState.update {
@@ -193,6 +214,33 @@ class ScanConnectViewModel(application: Application) : AndroidViewModel(applicat
                     _uiState.update { it.copy(connectionState = ConnectionState.Disconnected) }
                 }
             }
+        }
+    }
+
+    private fun hasBluetoothScanPermission(): Boolean {
+        val app = getApplication<Application>()
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(
+                app,
+                Manifest.permission.BLUETOOTH_SCAN
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(
+                app,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun hasBluetoothConnectPermission(): Boolean {
+        val app = getApplication<Application>()
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(
+                app,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
         }
     }
 
