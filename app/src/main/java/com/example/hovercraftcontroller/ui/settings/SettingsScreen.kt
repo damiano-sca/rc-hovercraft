@@ -1,0 +1,267 @@
+package com.example.hovercraftcontroller.ui.settings
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlin.math.roundToInt
+
+private val CommandRates = listOf(50, 60, 80, 100)
+
+@Composable
+fun SettingsRoute(
+    onBack: () -> Unit = {},
+    viewModel: SettingsViewModel = viewModel()
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    SettingsScreen(
+        state = state,
+        onBack = onBack,
+        onCommandRateChange = viewModel::setCommandRate,
+        onSensitivityChange = viewModel::setSensitivity,
+        onDeadZoneChange = viewModel::setDeadZone,
+        onInvertThrottleChange = viewModel::setInvertThrottle,
+        onInvertTurnChange = viewModel::setInvertTurn,
+        onDebugLoggingChange = viewModel::setDebugLogging
+    )
+}
+
+@Composable
+fun SettingsScreen(
+    state: SettingsUiState,
+    onBack: () -> Unit,
+    onCommandRateChange: (Int) -> Unit,
+    onSensitivityChange: (Float) -> Unit,
+    onDeadZoneChange: (Float) -> Unit,
+    onInvertThrottleChange: (Boolean) -> Unit,
+    onInvertTurnChange: (Boolean) -> Unit,
+    onDebugLoggingChange: (Boolean) -> Unit
+) {
+    val backgroundBrush = Brush.linearGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.background,
+            MaterialTheme.colorScheme.surfaceVariant
+        )
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(backgroundBrush)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        SettingsHeader(onBack = onBack)
+        CommandRateCard(
+            selectedRate = state.commandRateHz,
+            onRateSelected = onCommandRateChange
+        )
+        SliderCard(
+            title = "Sensitivity",
+            valueLabel = "${"%.2f".format(state.sensitivity)}x",
+            value = state.sensitivity,
+            valueRange = 0.5f..1.5f,
+            onValueChange = onSensitivityChange
+        )
+        SliderCard(
+            title = "Dead zone",
+            valueLabel = "${(state.deadZone * 100).roundToInt()}%",
+            value = state.deadZone,
+            valueRange = 0f..0.2f,
+            onValueChange = onDeadZoneChange
+        )
+        ToggleCard(
+            title = "Axis inversion",
+            rows = listOf(
+                ToggleRow(
+                    label = "Invert throttle",
+                    checked = state.invertThrottle,
+                    onCheckedChange = onInvertThrottleChange
+                ),
+                ToggleRow(
+                    label = "Invert turn",
+                    checked = state.invertTurn,
+                    onCheckedChange = onInvertTurnChange
+                )
+            )
+        )
+        ToggleCard(
+            title = "Debug",
+            rows = listOf(
+                ToggleRow(
+                    label = "Enable logging",
+                    checked = state.debugLogging,
+                    onCheckedChange = onDebugLoggingChange
+                )
+            )
+        )
+    }
+}
+
+@Composable
+private fun SettingsHeader(onBack: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(
+                text = "Settings",
+                style = MaterialTheme.typography.headlineMedium
+            )
+            Text(
+                text = "Tune the hovercraft response",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        TextButton(onClick = onBack) {
+            Text(text = "Back")
+        }
+    }
+}
+
+@Composable
+private fun CommandRateCard(
+    selectedRate: Int,
+    onRateSelected: (Int) -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Command rate",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                CommandRates.forEach { rate ->
+                    val isSelected = rate == selectedRate
+                    if (isSelected) {
+                        Button(onClick = { onRateSelected(rate) }) {
+                            Text(text = "$rate Hz")
+                        }
+                    } else {
+                        OutlinedButton(onClick = { onRateSelected(rate) }) {
+                            Text(text = "$rate Hz")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SliderCard(
+    title: String,
+    valueLabel: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = title, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = valueLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Slider(
+                value = value,
+                onValueChange = onValueChange,
+                valueRange = valueRange
+            )
+        }
+    }
+}
+
+private data class ToggleRow(
+    val label: String,
+    val checked: Boolean,
+    val onCheckedChange: (Boolean) -> Unit
+)
+
+@Composable
+private fun ToggleCard(
+    title: String,
+    rows: List<ToggleRow>
+) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(text = title, style = MaterialTheme.typography.titleMedium)
+            rows.forEach { row ->
+                ToggleRowItem(row = row)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToggleRowItem(row: ToggleRow) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = row.label, style = MaterialTheme.typography.bodyMedium)
+        Switch(
+            checked = row.checked,
+            onCheckedChange = row.onCheckedChange
+        )
+    }
+}

@@ -45,6 +45,7 @@ import kotlin.math.roundToInt
 @Composable
 fun ControlRoute(
     onBack: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     viewModel: ControlViewModel = viewModel()
 ) {
     LockOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
@@ -52,6 +53,7 @@ fun ControlRoute(
     ControlScreen(
         state = state,
         onBack = onBack,
+        onOpenSettings = onOpenSettings,
         onToggleArm = viewModel::toggleArm,
         onStop = viewModel::stop,
         onThrottleChange = viewModel::updateThrottle,
@@ -75,6 +77,7 @@ private fun LockOrientation(orientation: Int) {
 fun ControlScreen(
     state: ControlUiState,
     onBack: () -> Unit,
+    onOpenSettings: () -> Unit,
     onToggleArm: () -> Unit,
     onStop: () -> Unit,
     onThrottleChange: (Float) -> Unit,
@@ -97,7 +100,7 @@ fun ControlScreen(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            HeaderBar(state = state, onBack = onBack)
+            HeaderBar(state = state, onBack = onBack, onOpenSettings = onOpenSettings)
             Row(
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -125,7 +128,11 @@ fun ControlScreen(
 }
 
 @Composable
-private fun HeaderBar(state: ControlUiState, onBack: () -> Unit) {
+private fun HeaderBar(
+    state: ControlUiState,
+    onBack: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -142,8 +149,13 @@ private fun HeaderBar(state: ControlUiState, onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        TextButton(onClick = onBack) {
-            Text(text = "Back to Scan")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = onOpenSettings) {
+                Text(text = "Settings")
+            }
+            TextButton(onClick = onBack) {
+                Text(text = "Back to Scan")
+            }
         }
     }
 }
