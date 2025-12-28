@@ -17,15 +17,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -57,7 +61,9 @@ fun ControlRoute(
         onToggleArm = viewModel::toggleArm,
         onStop = viewModel::stop,
         onThrottleChange = viewModel::updateThrottle,
-        onRudderChange = viewModel::updateRudder
+        onThrottleRelease = { viewModel.updateThrottle(0f) },
+        onRudderChange = viewModel::updateRudder,
+        onRudderRelease = { viewModel.updateRudder(0f) }
     )
 }
 
@@ -81,7 +87,9 @@ fun ControlScreen(
     onToggleArm: () -> Unit,
     onStop: () -> Unit,
     onThrottleChange: (Float) -> Unit,
-    onRudderChange: (Float) -> Unit
+    onThrottleRelease: () -> Unit,
+    onRudderChange: (Float) -> Unit,
+    onRudderRelease: () -> Unit
 ) {
     val backgroundBrush = Brush.linearGradient(
         colors = listOf(
@@ -100,7 +108,7 @@ fun ControlScreen(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            HeaderBar(state = state, onBack = onBack, onOpenSettings = onOpenSettings)
+            HeaderBar(onBack = onBack, onOpenSettings = onOpenSettings)
             Row(
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -109,7 +117,8 @@ fun ControlScreen(
                 ThrottlePanel(
                     modifier = Modifier.weight(1f),
                     value = state.throttle,
-                    onValueChange = onThrottleChange
+                    onValueChange = onThrottleChange,
+                    onValueRelease = onThrottleRelease
                 )
                 CenterPanel(
                     modifier = Modifier.weight(1f),
@@ -120,7 +129,8 @@ fun ControlScreen(
                 RudderPanel(
                     modifier = Modifier.weight(1f),
                     value = state.rudder,
-                    onValueChange = onRudderChange
+                    onValueChange = onRudderChange,
+                    onValueRelease = onRudderRelease
                 )
             }
         }
@@ -129,7 +139,6 @@ fun ControlScreen(
 
 @Composable
 private fun HeaderBar(
-    state: ControlUiState,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
@@ -138,23 +147,33 @@ private fun HeaderBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
                 text = "Control",
                 style = MaterialTheme.typography.headlineMedium
             )
-            Text(
-                text = state.connectionLabel,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF35C46A))
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = onOpenSettings) {
-                Text(text = "Settings")
+            IconButton(onClick = onOpenSettings) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "Settings"
+                )
             }
-            TextButton(onClick = onBack) {
-                Text(text = "Back to Scan")
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.Filled.Bluetooth,
+                    contentDescription = "Bluetooth"
+                )
             }
         }
     }
@@ -260,7 +279,8 @@ private fun ActionRow(
 private fun ThrottlePanel(
     modifier: Modifier,
     value: Float,
-    onValueChange: (Float) -> Unit
+    onValueChange: (Float) -> Unit,
+    onValueRelease: () -> Unit
 ) {
     Card(
         modifier = modifier.fillMaxHeight(),
@@ -301,7 +321,8 @@ private fun ThrottlePanel(
             ) {
                 VerticalSlider(
                     value = value,
-                    onValueChange = onValueChange
+                    onValueChange = onValueChange,
+                    onValueRelease = onValueRelease
                 )
             }
         }
@@ -341,7 +362,8 @@ private fun CenterPanel(
 private fun RudderPanel(
     modifier: Modifier,
     value: Float,
-    onValueChange: (Float) -> Unit
+    onValueChange: (Float) -> Unit,
+    onValueRelease: () -> Unit
 ) {
     Card(
         modifier = modifier.fillMaxHeight(),
@@ -378,6 +400,7 @@ private fun RudderPanel(
             Slider(
                 value = value,
                 onValueChange = onValueChange,
+                onValueChangeFinished = onValueRelease,
                 valueRange = -1f..1f
             )
         }
@@ -387,7 +410,8 @@ private fun RudderPanel(
 @Composable
 private fun VerticalSlider(
     value: Float,
-    onValueChange: (Float) -> Unit
+    onValueChange: (Float) -> Unit,
+    onValueRelease: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -401,6 +425,7 @@ private fun VerticalSlider(
                 .rotate(-90f),
             value = value,
             onValueChange = onValueChange,
+            onValueChangeFinished = onValueRelease,
             valueRange = -1f..1f
         )
     }
