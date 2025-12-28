@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,7 +51,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
-fun ScanConnectRoute(viewModel: ScanConnectViewModel = viewModel()) {
+fun ScanConnectRoute(
+    onContinue: () -> Unit = {},
+    viewModel: ScanConnectViewModel = viewModel()
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val permissions = remember { requiredPermissions() }
@@ -85,7 +89,8 @@ fun ScanConnectRoute(viewModel: ScanConnectViewModel = viewModel()) {
         onScanClick = requestScan,
         onStopScan = viewModel::stopScan,
         onConnect = viewModel::connect,
-        onDisconnect = viewModel::disconnect
+        onDisconnect = viewModel::disconnect,
+        onContinue = onContinue
     )
 }
 
@@ -95,7 +100,8 @@ fun ScanConnectScreen(
     onScanClick: () -> Unit,
     onStopScan: () -> Unit,
     onConnect: (String) -> Unit,
-    onDisconnect: () -> Unit
+    onDisconnect: () -> Unit,
+    onContinue: () -> Unit
 ) {
     val backgroundBrush = Brush.linearGradient(
         colors = listOf(
@@ -142,6 +148,22 @@ fun ScanConnectScreen(
                 onConnect = onConnect,
                 onDisconnect = onDisconnect
             )
+
+            if (state.connectionState is ConnectionState.Connected) {
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onContinue
+                ) {
+                    Text(text = "Go to Controls")
+                }
+            }
+
+            TextButton(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onContinue
+            ) {
+                Text(text = "Skip connection (UI only)")
+            }
         }
     }
 }
