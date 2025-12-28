@@ -44,7 +44,7 @@ fun SettingsRoute(
         onSensitivityChange = viewModel::setSensitivity,
         onDeadZoneChange = viewModel::setDeadZone,
         onInvertThrottleChange = viewModel::setInvertThrottle,
-        onInvertTurnChange = viewModel::setInvertTurn,
+        onInvertRudderChange = viewModel::setInvertRudder,
         onDebugLoggingChange = viewModel::setDebugLogging
     )
 }
@@ -57,7 +57,7 @@ fun SettingsScreen(
     onSensitivityChange: (Float) -> Unit,
     onDeadZoneChange: (Float) -> Unit,
     onInvertThrottleChange: (Boolean) -> Unit,
-    onInvertTurnChange: (Boolean) -> Unit,
+    onInvertRudderChange: (Boolean) -> Unit,
     onDebugLoggingChange: (Boolean) -> Unit
 ) {
     val backgroundBrush = Brush.linearGradient(
@@ -103,9 +103,9 @@ fun SettingsScreen(
                     onCheckedChange = onInvertThrottleChange
                 ),
                 ToggleRow(
-                    label = "Invert turn",
-                    checked = state.invertTurn,
-                    onCheckedChange = onInvertTurnChange
+                    label = "Invert rudder",
+                    checked = state.invertRudder,
+                    onCheckedChange = onInvertRudderChange
                 )
             )
         )
@@ -165,18 +165,38 @@ private fun CommandRateCard(
                 text = "Command rate",
                 style = MaterialTheme.typography.titleMedium
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                CommandRates.forEach { rate ->
-                    val isSelected = rate == selectedRate
-                    if (isSelected) {
-                        Button(onClick = { onRateSelected(rate) }) {
-                            Text(text = "$rate Hz")
-                        }
-                    } else {
-                        OutlinedButton(onClick = { onRateSelected(rate) }) {
-                            Text(text = "$rate Hz")
-                        }
-                    }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                CommandRateRow(
+                    rates = CommandRates.take(2),
+                    selectedRate = selectedRate,
+                    onRateSelected = onRateSelected
+                )
+                CommandRateRow(
+                    rates = CommandRates.drop(2),
+                    selectedRate = selectedRate,
+                    onRateSelected = onRateSelected
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommandRateRow(
+    rates: List<Int>,
+    selectedRate: Int,
+    onRateSelected: (Int) -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        rates.forEach { rate ->
+            val isSelected = rate == selectedRate
+            if (isSelected) {
+                Button(onClick = { onRateSelected(rate) }) {
+                    Text(text = "$rate Hz")
+                }
+            } else {
+                OutlinedButton(onClick = { onRateSelected(rate) }) {
+                    Text(text = "$rate Hz")
                 }
             }
         }

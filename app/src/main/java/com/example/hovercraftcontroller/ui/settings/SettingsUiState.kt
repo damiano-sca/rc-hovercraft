@@ -5,6 +5,6 @@ data class SettingsUiState(
     val sensitivity: Float = 1.0f,
     val deadZone: Float = 0.05f,
     val invertThrottle: Boolean = false,
-    val invertTurn: Boolean = false,
+    val invertRudder: Boolean = false,
     val debugLogging: Boolean = false
 )

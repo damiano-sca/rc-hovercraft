@@ -25,8 +25,8 @@ class SettingsViewModel : ViewModel() {
         _uiState.update { it.copy(invertThrottle = enabled) }
     }
 
-    fun setInvertTurn(enabled: Boolean) {
-        _uiState.update { it.copy(invertTurn = enabled) }
+    fun setInvertRudder(enabled: Boolean) {
+        _uiState.update { it.copy(invertRudder = enabled) }
     }
 
     fun setDebugLogging(enabled: Boolean) {

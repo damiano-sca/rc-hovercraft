@@ -57,7 +57,7 @@ fun ControlRoute(
         onToggleArm = viewModel::toggleArm,
         onStop = viewModel::stop,
         onThrottleChange = viewModel::updateThrottle,
-        onTurnChange = viewModel::updateTurn
+        onRudderChange = viewModel::updateRudder
     )
 }
 
@@ -81,7 +81,7 @@ fun ControlScreen(
     onToggleArm: () -> Unit,
     onStop: () -> Unit,
     onThrottleChange: (Float) -> Unit,
-    onTurnChange: (Float) -> Unit
+    onRudderChange: (Float) -> Unit
 ) {
     val backgroundBrush = Brush.linearGradient(
         colors = listOf(
@@ -117,10 +117,10 @@ fun ControlScreen(
                     onToggleArm = onToggleArm,
                     onStop = onStop
                 )
-                TurnPanel(
+                RudderPanel(
                     modifier = Modifier.weight(1f),
-                    value = state.turn,
-                    onValueChange = onTurnChange
+                    value = state.rudder,
+                    onValueChange = onRudderChange
                 )
             }
         }
@@ -338,7 +338,7 @@ private fun CenterPanel(
 }
 
 @Composable
-private fun TurnPanel(
+private fun RudderPanel(
     modifier: Modifier,
     value: Float,
     onValueChange: (Float) -> Unit
@@ -361,7 +361,7 @@ private fun TurnPanel(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "Turn", style = MaterialTheme.typography.titleMedium)
+                Text(text = "Rudder", style = MaterialTheme.typography.titleMedium)
                 Surface(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                     contentColor = MaterialTheme.colorScheme.primary,

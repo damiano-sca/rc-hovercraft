@@ -21,7 +21,7 @@ class ControlViewModel : ViewModel() {
                 isArmed = false,
                 isStopped = true,
                 throttle = 0f,
-                turn = 0f
+                rudder = 0f
             )
         }
     }
@@ -30,7 +30,7 @@ class ControlViewModel : ViewModel() {
         _uiState.update { it.copy(throttle = value.coerceIn(-1f, 1f)) }
     }
 
-    fun updateTurn(value: Float) {
-        _uiState.update { it.copy(turn = value.coerceIn(-1f, 1f)) }
+    fun updateRudder(value: Float) {
+        _uiState.update { it.copy(rudder = value.coerceIn(-1f, 1f)) }
     }
 }
