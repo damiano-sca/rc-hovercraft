@@ -49,6 +49,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.hovercraftcontroller.BuildConfig
+import com.example.hovercraftcontroller.ble.BleDevice
+import com.example.hovercraftcontroller.ble.ConnectionState
+import com.example.hovercraftcontroller.ble.ScanStatus
 
 @Composable
 fun ScanConnectRoute(
@@ -158,11 +162,13 @@ fun ScanConnectScreen(
                 }
             }
 
-            TextButton(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onContinue
-            ) {
-                Text(text = "Skip connection (UI only)")
+            if (BuildConfig.DEBUG) {
+                TextButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onContinue
+                ) {
+                    Text(text = "Skip connection (UI only)")
+                }
             }
         }
     }

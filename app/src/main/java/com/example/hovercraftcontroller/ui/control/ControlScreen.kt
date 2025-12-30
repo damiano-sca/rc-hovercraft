@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.hovercraftcontroller.ble.ConnectionState
 import kotlin.math.roundToInt
 
 @Composable
@@ -108,7 +109,11 @@ fun ControlScreen(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            HeaderBar(onBack = onBack, onOpenSettings = onOpenSettings)
+            HeaderBar(
+                connectionState = state.connectionState,
+                onBack = onBack,
+                onOpenSettings = onOpenSettings
+            )
             Row(
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -139,6 +144,7 @@ fun ControlScreen(
 
 @Composable
 private fun HeaderBar(
+    connectionState: ConnectionState,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
@@ -147,6 +153,11 @@ private fun HeaderBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val dotColor = when (connectionState) {
+            is ConnectionState.Connected -> Color(0xFF35C46A)
+            is ConnectionState.Connecting -> Color(0xFFF0B14A)
+            ConnectionState.Disconnected -> MaterialTheme.colorScheme.outline
+        }
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -159,7 +170,7 @@ private fun HeaderBar(
                 modifier = Modifier
                     .size(10.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF35C46A))
+                    .background(dotColor)
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -185,7 +196,8 @@ private fun StatusStrip(state: ControlUiState) {
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        StatusPill(label = "RSSI ${state.rssi} dBm", color = MaterialTheme.colorScheme.secondary)
+        val rssiLabel = state.rssi?.let { "RSSI $it dBm" } ?: "RSSI --"
+        StatusPill(label = rssiLabel, color = MaterialTheme.colorScheme.secondary)
         StatusPill(
             label = "${state.commandRateHz} Hz",
             color = MaterialTheme.colorScheme.tertiary
@@ -426,7 +438,7 @@ private fun VerticalSlider(
             value = value,
             onValueChange = onValueChange,
             onValueChangeFinished = onValueRelease,
-            valueRange = -1f..1f
+            valueRange = 0f..1f
         )
     }
 }

@@ -1,35 +1,56 @@
 package com.example.hovercraftcontroller.ui.settings
 
-import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.hovercraftcontroller.HovercraftApplication
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
-class SettingsViewModel : ViewModel() {
-    private val _uiState = MutableStateFlow(SettingsUiState())
-    val uiState = _uiState.asStateFlow()
+class SettingsViewModel(application: Application) : AndroidViewModel(application) {
+    private val repository =
+        (application as HovercraftApplication).settingsRepository
+
+    val uiState = repository.settingsFlow.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        SettingsUiState()
+    )
 
     fun setCommandRate(rate: Int) {
-        _uiState.update { it.copy(commandRateHz = rate) }
+        viewModelScope.launch {
+            repository.setCommandRate(rate)
+        }
     }
 
     fun setSensitivity(value: Float) {
-        _uiState.update { it.copy(sensitivity = value.coerceIn(0.5f, 1.5f)) }
+        viewModelScope.launch {
+            repository.setSensitivity(value.coerceIn(0.5f, 1.5f))
+        }
     }
 
     fun setDeadZone(value: Float) {
-        _uiState.update { it.copy(deadZone = value.coerceIn(0f, 0.2f)) }
+        viewModelScope.launch {
+            repository.setDeadZone(value.coerceIn(0f, 0.2f))
+        }
     }
 
     fun setInvertThrottle(enabled: Boolean) {
-        _uiState.update { it.copy(invertThrottle = enabled) }
+        viewModelScope.launch {
+            repository.setInvertThrottle(enabled)
+        }
     }
 
     fun setInvertRudder(enabled: Boolean) {
-        _uiState.update { it.copy(invertRudder = enabled) }
+        viewModelScope.launch {
+            repository.setInvertRudder(enabled)
+        }
     }
 
     fun setDebugLogging(enabled: Boolean) {
-        _uiState.update { it.copy(debugLogging = enabled) }
+        viewModelScope.launch {
+            repository.setDebugLogging(enabled)
+        }
     }
 }
