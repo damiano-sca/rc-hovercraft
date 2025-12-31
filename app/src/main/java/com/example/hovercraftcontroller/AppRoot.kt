@@ -18,13 +18,25 @@ private enum class AppScreen {
 @Composable
 fun AppRoot() {
     var screen by rememberSaveable { mutableStateOf(AppScreen.Scan) }
+    // This is a simple back stack. A more robust solution would use a proper navigation library.
+    var previousScreen by rememberSaveable { mutableStateOf(AppScreen.Scan) }
+
+    fun navigate(newScreen: AppScreen) {
+        if (newScreen != screen) {
+            previousScreen = screen
+            screen = newScreen
+        }
+    }
 
     when (screen) {
-        AppScreen.Scan -> ScanConnectRoute(onContinue = { screen = AppScreen.Control })
-        AppScreen.Control -> ControlRoute(
-            onBack = { screen = AppScreen.Scan },
-            onOpenSettings = { screen = AppScreen.Settings }
+        AppScreen.Scan -> ScanConnectRoute(
+            onContinue = { navigate(AppScreen.Control) },
+            onOpenSettings = { navigate(AppScreen.Settings) }
         )
-        AppScreen.Settings -> SettingsRoute(onBack = { screen = AppScreen.Control })
+        AppScreen.Control -> ControlRoute(
+            onBack = { navigate(AppScreen.Scan) },
+            onOpenSettings = { navigate(AppScreen.Settings) }
+        )
+        AppScreen.Settings -> SettingsRoute(onBack = { screen = previousScreen })
     }
 }

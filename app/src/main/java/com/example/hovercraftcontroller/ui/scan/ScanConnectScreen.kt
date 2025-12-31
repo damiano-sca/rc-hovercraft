@@ -18,15 +18,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -49,7 +54,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.hovercraftcontroller.BuildConfig
 import com.example.hovercraftcontroller.ble.BleDevice
 import com.example.hovercraftcontroller.ble.ConnectionState
 import com.example.hovercraftcontroller.ble.ScanStatus
@@ -57,6 +61,7 @@ import com.example.hovercraftcontroller.ble.ScanStatus
 @Composable
 fun ScanConnectRoute(
     onContinue: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     viewModel: ScanConnectViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -94,7 +99,8 @@ fun ScanConnectRoute(
         onStopScan = viewModel::stopScan,
         onConnect = viewModel::connect,
         onDisconnect = viewModel::disconnect,
-        onContinue = onContinue
+        onContinue = onContinue,
+        onOpenSettings = onOpenSettings
     )
 }
 
@@ -105,7 +111,8 @@ fun ScanConnectScreen(
     onStopScan: () -> Unit,
     onConnect: (String) -> Unit,
     onDisconnect: () -> Unit,
-    onContinue: () -> Unit
+    onContinue: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     val backgroundBrush = Brush.linearGradient(
         colors = listOf(
@@ -118,13 +125,14 @@ fun ScanConnectScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundBrush)
+            .statusBarsPadding()
             .padding(16.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            HeaderSection(state = state)
+            HeaderSection(state = state, onOpenSettings = onOpenSettings)
             ControlRow(
                 state = state,
                 onScanClick = onScanClick,
@@ -161,26 +169,30 @@ fun ScanConnectScreen(
                     Text(text = "Go to Controls")
                 }
             }
-
-            if (BuildConfig.DEBUG) {
-                TextButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = onContinue
-                ) {
-                    Text(text = "Skip connection (UI only)")
-                }
-            }
         }
     }
 }
 
 @Composable
-private fun HeaderSection(state: ScanConnectUiState) {
+private fun HeaderSection(state: ScanConnectUiState, onOpenSettings: () -> Unit) {
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = "Scan & Connect",
-            style = MaterialTheme.typography.headlineMedium
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Scan & Connect",
+                style = MaterialTheme.typography.headlineMedium
+            )
+            IconButton(onClick = onOpenSettings) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "Settings"
+                )
+            }
+        }
         StatusRow(state = state)
     }
 }

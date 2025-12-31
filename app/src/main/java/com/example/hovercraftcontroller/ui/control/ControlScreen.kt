@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -103,6 +104,7 @@ fun ControlScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundBrush)
+            .statusBarsPadding()
             .padding(16.dp)
     ) {
         Column(
@@ -359,13 +361,15 @@ private fun CenterPanel(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceAround
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(text = "Status", style = MaterialTheme.typography.titleMedium)
-                StatusStrip(state = state)
-            }
-            ActionRow(state = state, onToggleArm = onToggleArm, onStop = onStop)
+            StatusStrip(state)
+            ActionRow(
+                state = state,
+                onToggleArm = onToggleArm,
+                onStop = onStop
+            )
         }
     }
 }
@@ -388,6 +392,7 @@ private fun RudderPanel(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -408,13 +413,15 @@ private fun RudderPanel(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(18.dp))
-            Slider(
-                value = value,
-                onValueChange = onValueChange,
-                onValueChangeFinished = onValueRelease,
-                valueRange = -1f..1f
-            )
+            Box(modifier = Modifier.rotate(-90f)) {
+                Slider(
+                    modifier = Modifier.size(width = 200.dp, height = 100.dp),
+                    value = value,
+                    onValueChange = onValueChange,
+                    onValueChangeFinished = onValueRelease,
+                    valueRange = -1f..1f
+                )
+            }
         }
     }
 }
@@ -423,22 +430,15 @@ private fun RudderPanel(
 private fun VerticalSlider(
     value: Float,
     onValueChange: (Float) -> Unit,
-    onValueRelease: () -> Unit
+    onValueRelease: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = Modifier
-            .height(260.dp)
-            .fillMaxWidth(),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(modifier = modifier.rotate(-90f)) {
         Slider(
-            modifier = Modifier
-                .fillMaxWidth()
-                .rotate(-90f),
+            modifier = Modifier.size(width = 200.dp, height = 100.dp),
             value = value,
             onValueChange = onValueChange,
-            onValueChangeFinished = onValueRelease,
-            valueRange = 0f..1f
+            onValueChangeFinished = onValueRelease
         )
     }
 }
