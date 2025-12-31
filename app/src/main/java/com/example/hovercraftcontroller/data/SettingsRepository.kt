@@ -17,7 +17,6 @@ class SettingsRepository(private val context: Context) {
         val commandRate = intPreferencesKey("command_rate_hz")
         val sensitivity = floatPreferencesKey("sensitivity")
         val deadZone = floatPreferencesKey("dead_zone")
-        val invertThrottle = booleanPreferencesKey("invert_throttle")
         val invertRudder = booleanPreferencesKey("invert_rudder")
         val debugLogging = booleanPreferencesKey("debug_logging")
     }
@@ -27,7 +26,6 @@ class SettingsRepository(private val context: Context) {
             commandRateHz = prefs[Keys.commandRate] ?: 60,
             sensitivity = prefs[Keys.sensitivity] ?: 1.0f,
             deadZone = prefs[Keys.deadZone] ?: 0.05f,
-            invertThrottle = prefs[Keys.invertThrottle] ?: false,
             invertRudder = prefs[Keys.invertRudder] ?: false,
             debugLogging = prefs[Keys.debugLogging] ?: false
         )
@@ -43,10 +41,6 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setDeadZone(value: Float) {
         context.dataStore.edit { it[Keys.deadZone] = value }
-    }
-
-    suspend fun setInvertThrottle(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.invertThrottle] = enabled }
     }
 
     suspend fun setInvertRudder(enabled: Boolean) {

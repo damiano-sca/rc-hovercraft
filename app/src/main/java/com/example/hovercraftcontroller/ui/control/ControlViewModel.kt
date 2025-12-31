@@ -165,9 +165,6 @@ class ControlViewModel(application: Application) : AndroidViewModel(application)
             adjusted = 0f
         }
         adjusted *= settingsState.sensitivity
-        if (settingsState.invertThrottle) {
-            adjusted = 1f - adjusted
-        }
         return adjusted.coerceIn(0f, 1f)
     }
 

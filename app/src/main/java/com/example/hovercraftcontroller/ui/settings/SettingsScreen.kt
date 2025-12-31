@@ -43,7 +43,6 @@ fun SettingsRoute(
         onCommandRateChange = viewModel::setCommandRate,
         onSensitivityChange = viewModel::setSensitivity,
         onDeadZoneChange = viewModel::setDeadZone,
-        onInvertThrottleChange = viewModel::setInvertThrottle,
         onInvertRudderChange = viewModel::setInvertRudder,
         onDebugLoggingChange = viewModel::setDebugLogging
     )
@@ -56,7 +55,6 @@ fun SettingsScreen(
     onCommandRateChange: (Int) -> Unit,
     onSensitivityChange: (Float) -> Unit,
     onDeadZoneChange: (Float) -> Unit,
-    onInvertThrottleChange: (Boolean) -> Unit,
     onInvertRudderChange: (Boolean) -> Unit,
     onDebugLoggingChange: (Boolean) -> Unit
 ) {
@@ -95,13 +93,8 @@ fun SettingsScreen(
             onValueChange = onDeadZoneChange
         )
         ToggleCard(
-            title = "Axis inversion",
+            title = "Rudder inversion",
             rows = listOf(
-                ToggleRow(
-                    label = "Invert throttle",
-                    checked = state.invertThrottle,
-                    onCheckedChange = onInvertThrottleChange
-                ),
                 ToggleRow(
                     label = "Invert rudder",
                     checked = state.invertRudder,

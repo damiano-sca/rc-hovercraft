@@ -36,12 +36,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun setInvertThrottle(enabled: Boolean) {
-        viewModelScope.launch {
-            repository.setInvertThrottle(enabled)
-        }
-    }
-
     fun setInvertRudder(enabled: Boolean) {
         viewModelScope.launch {
             repository.setInvertRudder(enabled)
