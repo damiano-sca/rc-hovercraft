@@ -10,21 +10,18 @@ object BlePacket {
         sequence: Int,
         throttle: Float,
         rudder: Float,
-        lift: Float,
         arm: Boolean,
         stop: Boolean
     ): ByteArray {
-        val payload = ByteArray(10)
+        val payload = ByteArray(8)
         payload[0] = START_BYTE
         payload[1] = (sequence and 0xFF).toByte()
         payload[2] = scaleUnsigned(throttle)
         payload[3] = scaleSigned(rudder)
-        payload[4] = scaleUnsigned(lift)
-        payload[5] = buildFlags(arm = arm, stop = stop)
-        payload[6] = 0
-        payload[7] = 0
-        payload[8] = 0
-        payload[9] = END_BYTE
+        payload[4] = buildFlags(arm = arm, stop = stop)
+        payload[5] = 0
+        payload[6] = crc8(payload, 6)
+        payload[7] = END_BYTE
         return payload
     }
 
@@ -45,5 +42,21 @@ object BlePacket {
         val clamped = value.coerceIn(0f, 1f)
         val scaled = (clamped * 100f).roundToInt().coerceIn(0, 100)
         return scaled.toByte()
+    }
+
+    private fun crc8(data: ByteArray, length: Int): Byte {
+        var crc = 0
+        for (i in 0 until length) {
+            var value = data[i].toInt() and 0xFF
+            crc = crc xor value
+            repeat(8) {
+                crc = if ((crc and 0x80) != 0) {
+                    ((crc shl 1) xor 0x07) and 0xFF
+                } else {
+                    (crc shl 1) and 0xFF
+                }
+            }
+        }
+        return crc.toByte()
     }
 }

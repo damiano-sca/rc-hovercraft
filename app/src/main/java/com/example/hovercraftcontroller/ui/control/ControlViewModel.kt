@@ -121,7 +121,6 @@ class ControlViewModel(application: Application) : AndroidViewModel(application)
                     sequence = sequence,
                     throttle = throttle,
                     rudder = rudder,
-                    lift = 0f,
                     arm = state.isArmed,
                     stop = false
                 )
@@ -138,7 +137,6 @@ class ControlViewModel(application: Application) : AndroidViewModel(application)
             sequence = sequence,
             throttle = 0f,
             rudder = 0f,
-            lift = 0f,
             arm = false,
             stop = false
         )
@@ -151,7 +149,6 @@ class ControlViewModel(application: Application) : AndroidViewModel(application)
             sequence = sequence,
             throttle = 0f,
             rudder = 0f,
-            lift = 0f,
             arm = false,
             stop = true
         )

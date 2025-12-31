@@ -104,7 +104,6 @@ TELEMETRY_UUID
 - seq
 - throttle (-100..100)
 - yaw (-100..100)
-- lift (0..100)
 - flags (ARM, STOP)
 - reserved
 - reserved

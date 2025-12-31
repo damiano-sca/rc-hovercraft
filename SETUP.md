@@ -17,6 +17,14 @@ Update these constants in `app/src/main/java/com/example/hovercraftcontroller/bl
 - `TELEMETRY_CHAR_UUID`: Optional notify characteristic (not used yet).
 - `DEVICE_NAME_PREFIX`: Optional name prefix filter (set to empty to disable).
 
+## Firmware (ESP32-S3)
+1) Open `firmware/hovercraft_controller/hovercraft_controller.ino` in Arduino IDE.
+2) Select board: **ESP32S3 Dev Module**.
+3) Update pins if needed:
+   - `THROTTLE_PWM_PIN`
+   - `RUDDER_PWM_PIN`
+4) Flash the board.
+
 ## Build and Run
 - Run the `app` configuration on your device.
 - Grant Bluetooth permissions when prompted.
@@ -40,6 +48,16 @@ Update these constants in `app/src/main/java/com/example/hovercraftcontroller/bl
   - `app/src/main/java/com/example/hovercraftcontroller/ui/control/ControlViewModel.kt`
   - `app/src/main/java/com/example/hovercraftcontroller/ble/BlePacket.kt`
 - Rudder remains bidirectional (-100..100).
+- Lift is not used.
+- Packet format (8 bytes):
+  - Byte 0: 0xA5 (start)
+  - Byte 1: seq
+  - Byte 2: throttle (0..100)
+  - Byte 3: rudder (-100..100)
+  - Byte 4: flags (bit0 ARM, bit1 STOP)
+  - Byte 5: reserved (0)
+  - Byte 6: CRC8 (poly 0x07 over bytes 0..5)
+  - Byte 7: 0x5A (end)
 - Settings are persisted via DataStore in:
   - `app/src/main/java/com/example/hovercraftcontroller/data/SettingsRepository.kt`
 
