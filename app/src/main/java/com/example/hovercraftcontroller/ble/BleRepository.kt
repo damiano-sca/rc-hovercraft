@@ -18,7 +18,6 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
-import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -228,10 +227,7 @@ class BleRepository(private val context: Context) {
             return
         }
         val device = result.device ?: return
-        val name = device.name ?: "Unknown"
-        if (!matchesNameFilter(name)) {
-            return
-        }
+        val name = result.scanRecord?.deviceName ?: device.name ?: "Unknown"
         val bleDevice = BleDevice(
             name = name,
             address = device.address,
@@ -243,22 +239,7 @@ class BleRepository(private val context: Context) {
     }
 
     private fun buildFilters(): List<ScanFilter> {
-        val filters = mutableListOf<ScanFilter>()
-        val serviceUuid = BleConfig.SERVICE_UUID.takeIf { it.isNotBlank() }
-        if (serviceUuid != null) {
-            val uuid = parseUuid(serviceUuid) ?: return filters
-            filters.add(
-                ScanFilter.Builder()
-                    .setServiceUuid(ParcelUuid(uuid))
-                    .build()
-            )
-        }
-        return filters
-    }
-
-    private fun matchesNameFilter(name: String): Boolean {
-        val prefix = BleConfig.DEVICE_NAME_PREFIX
-        return prefix.isBlank() || name.startsWith(prefix, ignoreCase = true)
+        return emptyList()
     }
 
     private val gattCallback = object : BluetoothGattCallback() {

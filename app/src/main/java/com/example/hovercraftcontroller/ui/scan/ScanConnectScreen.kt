@@ -37,8 +37,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,6 +67,9 @@ fun ScanConnectRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val permissions = remember { requiredPermissions() }
+    val hasPermissions = permissions.all {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    }
     var pendingScan by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -81,20 +84,29 @@ fun ScanConnectRoute(
         pendingScan = false
     }
 
+    val requestPermissions: () -> Unit = {
+        permissionLauncher.launch(permissions.toTypedArray())
+    }
+
     val requestScan: () -> Unit = {
-        val hasPermissions = permissions.all {
-            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-        }
         if (hasPermissions) {
             viewModel.startScan()
         } else {
             pendingScan = true
-            permissionLauncher.launch(permissions.toTypedArray())
+            requestPermissions()
+        }
+    }
+
+    LaunchedEffect(state.connectionState) {
+        if (state.connectionState is ConnectionState.Connected) {
+            onContinue()
         }
     }
 
     ScanConnectScreen(
         state = state,
+        hasPermissions = hasPermissions,
+        onRequestPermissions = requestPermissions,
         onScanClick = requestScan,
         onStopScan = viewModel::stopScan,
         onConnect = viewModel::connect,
@@ -107,6 +119,8 @@ fun ScanConnectRoute(
 @Composable
 fun ScanConnectScreen(
     state: ScanConnectUiState,
+    hasPermissions: Boolean,
+    onRequestPermissions: () -> Unit,
     onScanClick: () -> Unit,
     onStopScan: () -> Unit,
     onConnect: (String) -> Unit,
@@ -133,6 +147,9 @@ fun ScanConnectScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             HeaderSection(state = state, onOpenSettings = onOpenSettings)
+            if (!hasPermissions) {
+                PermissionsCard(onRequestPermissions = onRequestPermissions)
+            }
             ControlRow(
                 state = state,
                 onScanClick = onScanClick,
@@ -194,6 +211,32 @@ private fun HeaderSection(state: ScanConnectUiState, onOpenSettings: () -> Unit)
             }
         }
         StatusRow(state = state)
+    }
+}
+
+@Composable
+private fun PermissionsCard(onRequestPermissions: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "Bluetooth permissions required",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = "Grant Bluetooth Scan and Connect to discover devices.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(onClick = onRequestPermissions) {
+                Text(text = "Grant permissions")
+            }
+        }
     }
 }
 
