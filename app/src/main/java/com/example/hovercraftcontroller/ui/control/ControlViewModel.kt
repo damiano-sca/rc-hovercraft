@@ -37,7 +37,6 @@ class ControlViewModel(application: Application) : AndroidViewModel(application)
                         current.copy(
                             connectionState = state,
                             isArmed = false,
-                            isStopped = false,
                             throttle = 0f,
                             rudder = 0f
                         )
@@ -65,28 +64,25 @@ class ControlViewModel(application: Application) : AndroidViewModel(application)
     fun toggleArm() {
         val current = _uiState.value
         if (current.isArmed) {
-            _uiState.update { it.copy(isArmed = false, isStopped = false) }
-            sendNeutral()
+            _uiState.update {
+                it.copy(
+                    isArmed = false,
+                    throttle = 0f,
+                    rudder = 0f
+                )
+            }
+            sendDisarm()
             updateStreaming()
             return
         }
         if (current.connectionState is ConnectionState.Connected) {
-            _uiState.update { it.copy(isArmed = true, isStopped = false) }
+            _uiState.update { it.copy(isArmed = true) }
             updateStreaming()
         }
     }
 
-    fun stop() {
-        _uiState.update { state ->
-            state.copy(
-                isArmed = false,
-                isStopped = true,
-                throttle = 0f,
-                rudder = 0f
-            )
-        }
-        sendStop()
-        updateStreaming()
+    fun disconnect() {
+        bleRepository.disconnect()
     }
 
     fun updateThrottle(value: Float) {
@@ -121,8 +117,7 @@ class ControlViewModel(application: Application) : AndroidViewModel(application)
                     sequence = sequence,
                     throttle = throttle,
                     rudder = rudder,
-                    arm = state.isArmed,
-                    stop = false
+                    arm = state.isArmed
                 )
                 bleRepository.sendCommand(packet)
                 sequence = (sequence + 1) and 0xFF
@@ -132,25 +127,12 @@ class ControlViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun sendNeutral() {
+    private fun sendDisarm() {
         val packet = BlePacket.buildCommand(
             sequence = sequence,
             throttle = 0f,
             rudder = 0f,
-            arm = false,
-            stop = false
-        )
-        bleRepository.sendCommand(packet)
-        sequence = (sequence + 1) and 0xFF
-    }
-
-    private fun sendStop() {
-        val packet = BlePacket.buildCommand(
-            sequence = sequence,
-            throttle = 0f,
-            rudder = 0f,
-            arm = false,
-            stop = true
+            arm = false
         )
         bleRepository.sendCommand(packet)
         sequence = (sequence + 1) and 0xFF

@@ -8,6 +8,5 @@ data class ControlUiState(
     val rudder: Float = 0f,
     val connectionState: ConnectionState = ConnectionState.Disconnected,
     val rssi: Int? = null,
-    val commandRateHz: Int = 60,
-    val isStopped: Boolean = false
+    val commandRateHz: Int = 60
 )

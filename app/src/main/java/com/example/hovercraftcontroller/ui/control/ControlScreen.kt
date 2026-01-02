@@ -8,11 +8,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -41,7 +39,6 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -58,10 +55,12 @@ fun ControlRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     ControlScreen(
         state = state,
-        onBack = onBack,
+        onBack = {
+            viewModel.disconnect()
+            onBack()
+        },
         onOpenSettings = onOpenSettings,
         onToggleArm = viewModel::toggleArm,
-        onStop = viewModel::stop,
         onThrottleChange = viewModel::updateThrottle,
         onThrottleRelease = { viewModel.updateThrottle(0f) },
         onRudderChange = viewModel::updateRudder,
@@ -87,7 +86,6 @@ fun ControlScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onToggleArm: () -> Unit,
-    onStop: () -> Unit,
     onThrottleChange: (Float) -> Unit,
     onThrottleRelease: () -> Unit,
     onRudderChange: (Float) -> Unit,
@@ -130,8 +128,7 @@ fun ControlScreen(
                 CenterPanel(
                     modifier = Modifier.weight(1f),
                     state = state,
-                    onToggleArm = onToggleArm,
-                    onStop = onStop
+                    onToggleArm = onToggleArm
                 )
                 RudderPanel(
                     modifier = Modifier.weight(1f),
@@ -204,17 +201,13 @@ private fun StatusStrip(state: ControlUiState) {
             label = "${state.commandRateHz} Hz",
             color = MaterialTheme.colorScheme.tertiary
         )
-        val armColor = when {
-            state.isStopped -> MaterialTheme.colorScheme.error
-            state.isArmed -> MaterialTheme.colorScheme.primary
-            else -> MaterialTheme.colorScheme.outline
+        val armColor = if (state.isArmed) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.outline
         }
         StatusPill(
-            label = when {
-                state.isStopped -> "STOPPED"
-                state.isArmed -> "ARMED"
-                else -> "SAFE"
-            },
+            label = if (state.isArmed) "ARMED" else "SAFE",
             color = armColor
         )
     }
@@ -246,15 +239,14 @@ private fun StatusPill(label: String, color: Color) {
 @Composable
 private fun ActionRow(
     state: ControlUiState,
-    onToggleArm: () -> Unit,
-    onStop: () -> Unit
+    onToggleArm: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.Center
     ) {
         Button(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.fillMaxWidth(),
             onClick = onToggleArm,
             colors = ButtonDefaults.buttonColors(
                 containerColor = if (state.isArmed) {
@@ -274,17 +266,7 @@ private fun ActionRow(
                 null
             }
         ) {
-            Text(text = if (state.isArmed) "Disarm" else "Arm")
-        }
-        Button(
-            modifier = Modifier.weight(1f),
-            onClick = onStop,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.error,
-                contentColor = MaterialTheme.colorScheme.onError
-            )
-        ) {
-            Text(text = "STOP", fontWeight = FontWeight.Bold)
+            Text(text = if (state.isArmed) "DISARM" else "ARM")
         }
     }
 }
@@ -347,8 +329,7 @@ private fun ThrottlePanel(
 private fun CenterPanel(
     modifier: Modifier,
     state: ControlUiState,
-    onToggleArm: () -> Unit,
-    onStop: () -> Unit
+    onToggleArm: () -> Unit
 ) {
     Card(
         modifier = modifier.fillMaxHeight(),
@@ -367,8 +348,7 @@ private fun CenterPanel(
             StatusStrip(state)
             ActionRow(
                 state = state,
-                onToggleArm = onToggleArm,
-                onStop = onStop
+                onToggleArm = onToggleArm
             )
         }
     }
@@ -395,6 +375,7 @@ private fun RudderPanel(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
+            val rudderAngle = rudderToAngle(value)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -408,18 +389,21 @@ private fun RudderPanel(
                 ) {
                     Text(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        text = "${(value * 100).roundToInt()}%",
+                        text = "${rudderAngle.roundToInt()} deg",
                         style = MaterialTheme.typography.labelMedium
                     )
                 }
             }
-            Box(modifier = Modifier.rotate(-90f)) {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
                 Slider(
-                    modifier = Modifier.size(width = 200.dp, height = 100.dp),
-                    value = value,
-                    onValueChange = onValueChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    value = rudderAngle,
+                    onValueChange = { angle -> onValueChange(angleToRudder(angle)) },
                     onValueChangeFinished = onValueRelease,
-                    valueRange = -1f..1f
+                    valueRange = 20f..160f
                 )
             }
         }
@@ -441,4 +425,15 @@ private fun VerticalSlider(
             onValueChangeFinished = onValueRelease
         )
     }
+}
+
+private fun rudderToAngle(value: Float): Float {
+    val clamped = value.coerceIn(-1f, 1f)
+    return ((clamped + 1f) * 0.5f * 140f + 20f).coerceIn(20f, 160f)
+}
+
+private fun angleToRudder(angle: Float): Float {
+    val clamped = angle.coerceIn(20f, 160f)
+    val normalized = ((clamped - 20f) / 140f) * 2f - 1f
+    return normalized.coerceIn(-1f, 1f)
 }
