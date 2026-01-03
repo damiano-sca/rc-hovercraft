@@ -13,22 +13,18 @@ static const uint8_t FLAG_ARM = 0x01;
 static const uint32_t FAILSAFE_MS = 250;
 
 static const int THROTTLE_PWM_PIN = 7;
-static const uint32_t THROTTLE_PWM_FREQ = 2000;
-static const uint8_t THROTTLE_PWM_RES = 8;
+static const int THROTTLE_MIN_US = 1000;
+static const int THROTTLE_MAX_US = 2000;
 
 static const int RUDDER_PWM_PIN = 8;
-static const int RUDDER_MIN_US = 1000;
-static const int RUDDER_MAX_US = 2000;
-static const uint8_t RUDDER_MIN_ANGLE = 20;
-static const uint8_t RUDDER_MAX_ANGLE = 160;
-static const uint8_t RUDDER_CENTER_ANGLE = 90;
+static const uint8_t RUDDER_DISARMED_ANGLE = 0;
 
+static Servo throttleServo;
 static Servo rudderServo;
-static int throttlePwmChannel = 0;
 
 struct CommandState {
   uint8_t throttle = 0;
-  uint8_t rudderAngle = RUDDER_CENTER_ANGLE;
+  uint8_t rudderAngle = RUDDER_DISARMED_ANGLE;
   bool armed = false;
 };
 
@@ -50,17 +46,73 @@ static uint8_t crc8(const uint8_t *data, size_t length) {
   return crc;
 }
 
-static void applyOutputs(const CommandState &cmd) {
+static void applyThrottle(const CommandState &cmd) {
   uint8_t throttle = cmd.armed ? cmd.throttle : 0;
-  uint8_t rudderAngle = cmd.armed ? cmd.rudderAngle : RUDDER_CENTER_ANGLE;
 
-  uint32_t throttleDuty = map(throttle, 0, 100, 0, 255);
-  ledcWrite(throttlePwmChannel, throttleDuty);
+  int throttleUs = map(throttle, 0, 100, THROTTLE_MIN_US, THROTTLE_MAX_US);
+  throttleServo.writeMicroseconds(throttleUs);
 
-  rudderAngle = constrain(rudderAngle, RUDDER_MIN_ANGLE, RUDDER_MAX_ANGLE);
+  Serial.print("Throttle microseconds: ");
+  Serial.println(throttleUs);
+}
+
+static void applyRudder(const CommandState &cmd) {
+  uint8_t rudderAngle = cmd.armed ? cmd.rudderAngle : RUDDER_DISARMED_ANGLE;
   rudderServo.write(rudderAngle);
+  
   Serial.print("Rudder angle: ");
   Serial.println(rudderAngle);
+}
+
+static void applyOutputs(const CommandState &cmd) {
+  applyThrottle(cmd);
+  applyRudder(cmd);
+}
+
+// Initializes serial logging for startup and status messages.
+static void initSerial() {
+  Serial.begin(115200);
+  Serial.println("Starting serial");
+}
+
+// Arms the ESC and sets the rudder to a known starting angle.
+static void initServos() {
+  throttleServo.attach(THROTTLE_PWM_PIN);
+  throttleServo.writeMicroseconds(THROTTLE_MIN_US);
+  rudderServo.attach(RUDDER_PWM_PIN);
+  rudderServo.write(RUDDER_DISARMED_ANGLE);
+  Serial.println("Servos initialized");
+}
+
+// Sets up BLE services, characteristics, and advertising.
+static void initBle() {
+  NimBLEDevice::init(DEVICE_NAME);
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9);
+  Serial.println("BLE: init");
+
+  NimBLEServer *server = NimBLEDevice::createServer();
+  server->setCallbacks(new ServerCallbacks());
+  NimBLEService *service = server->createService(SERVICE_UUID);
+  NimBLECharacteristic *commandCharacteristic = service->createCharacteristic(
+      COMMAND_CHAR_UUID,
+      NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+
+  commandCharacteristic->setCallbacks(new CommandCallbacks());
+  service->start();
+
+  NimBLEAdvertising *advertising = NimBLEDevice::getAdvertising();
+  advertising->addServiceUUID(SERVICE_UUID);
+  NimBLEAdvertisementData advData;
+  advData.setName(DEVICE_NAME);
+  advData.setCompleteServices(NimBLEUUID(SERVICE_UUID));
+  advertising->setAdvertisementData(advData);
+
+  NimBLEAdvertisementData scanData;
+  scanData.setName(DEVICE_NAME);
+  advertising->setScanResponseData(scanData);
+  advertising->start();
+  Serial.print("BLE: advertising as ");
+  Serial.println(DEVICE_NAME);
 }
 
 class ServerCallbacks : public NimBLEServerCallbacks {
@@ -103,33 +155,30 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
 
  private:
   void handleWrite(NimBLECharacteristic *characteristic) {
+    // 1) Read the raw payload.
     std::string value = characteristic->getValue();
+    // 2) Validate packet length.
     if (value.size() != 8) {
       return;
     }
+    // 3) Validate framing bytes before parsing content.
     const uint8_t *data = reinterpret_cast<const uint8_t *>(value.data());
     if (data[0] != START_BYTE || data[7] != END_BYTE) {
       return;
     }
+    // 4) Validate CRC over the header + payload bytes.
     uint8_t expectedCrc = crc8(data, 6);
     if (data[6] != expectedCrc) {
       return;
     }
 
+    // 5) Decode fields into a command struct.
     CommandState cmd;
     cmd.throttle = data[2];
     cmd.rudderAngle = static_cast<uint8_t>(data[3]);
     cmd.armed = (data[4] & FLAG_ARM) != 0;
 
-    Serial.print("CMD: seq=");
-    Serial.print(data[1]);
-    Serial.print(" throttle=");
-    Serial.print(cmd.throttle);
-    Serial.print(" rudderAngle=");
-    Serial.print(cmd.rudderAngle);
-    Serial.print(" arm=");
-    Serial.println(cmd.armed ? "1" : "0");
-
+    // 6) Apply the command and reset the failsafe timer.
     lastCommand = cmd;
     lastPacketMs = millis();
     applyOutputs(lastCommand);
@@ -137,49 +186,19 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
 };
 
 void setup() {
-  Serial.begin(115200);
-  Serial.println("Starting");
-
-  //throttlePwmChannel = ledcAttach(THROTTLE_PWM_PIN, THROTTLE_PWM_FREQ, THROTTLE_PWM_RES);
-  rudderServo.attach(RUDDER_PWM_PIN);
-  rudderServo.write(0);
-
-  NimBLEDevice::init(DEVICE_NAME);
-  NimBLEDevice::setPower(ESP_PWR_LVL_P9);
-  Serial.println("BLE: init");
-
-  NimBLEServer *server = NimBLEDevice::createServer();
-  server->setCallbacks(new ServerCallbacks());
-  NimBLEService *service = server->createService(SERVICE_UUID);
-  NimBLECharacteristic *commandCharacteristic = service->createCharacteristic(
-      COMMAND_CHAR_UUID,
-      NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-
-  commandCharacteristic->setCallbacks(new CommandCallbacks());
-  service->start();
-
-  NimBLEAdvertising *advertising = NimBLEDevice::getAdvertising();
-  advertising->addServiceUUID(SERVICE_UUID);
-  NimBLEAdvertisementData advData;
-  advData.setName(DEVICE_NAME);
-  advData.setCompleteServices(NimBLEUUID(SERVICE_UUID));
-  advertising->setAdvertisementData(advData);
-
-  NimBLEAdvertisementData scanData;
-  scanData.setName(DEVICE_NAME);
-  advertising->setScanResponseData(scanData);
-  advertising->start();
-  Serial.print("BLE: advertising as ");
-  Serial.println(DEVICE_NAME);
+  initSerial();
+  initServos();
+  initBle();
 
   lastPacketMs = millis();
 }
 
 void loop() {
   if (millis() - lastPacketMs > FAILSAFE_MS) {
-    if (lastCommand.throttle != 0 || lastCommand.rudderAngle != RUDDER_CENTER_ANGLE || lastCommand.armed) {
+    // Only drive outputs if we need to return to the disarmed state.
+    if (lastCommand.throttle != 0 || lastCommand.rudderAngle != RUDDER_DISARMED_ANGLE || lastCommand.armed) {
       lastCommand.throttle = 0;
-      lastCommand.rudderAngle = RUDDER_CENTER_ANGLE;
+      lastCommand.rudderAngle = RUDDER_DISARMED_ANGLE;
       lastCommand.armed = false;
       applyOutputs(lastCommand);
     }
