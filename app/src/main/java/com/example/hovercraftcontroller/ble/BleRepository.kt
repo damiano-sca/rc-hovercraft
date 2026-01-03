@@ -18,6 +18,7 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +65,7 @@ class BleRepository(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun startScan() {
+        Log.d(TAG, "Start scan")
         val adapter = bluetoothAdapter
         if (adapter == null) {
             setError("Bluetooth is not available on this device.")
@@ -125,6 +127,7 @@ class BleRepository(private val context: Context) {
         if (_scanStatus.value != ScanStatus.Scanning) {
             return
         }
+        Log.d(TAG, "Stop scan")
         scanJob?.cancel()
         scanJob = null
         scanner?.let { bleScanner ->
@@ -138,6 +141,7 @@ class BleRepository(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun connect(address: String) {
+        Log.d(TAG, "Connect to $address")
         val adapter = bluetoothAdapter
         if (adapter == null) {
             setError("Bluetooth is not available on this device.")
@@ -167,6 +171,7 @@ class BleRepository(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun disconnect() {
+        Log.d(TAG, "Disconnect")
         rssiJob?.cancel()
         rssiJob = null
         currentGatt?.disconnect()
@@ -196,6 +201,7 @@ class BleRepository(private val context: Context) {
     }
 
     fun setError(message: String) {
+        Log.w(TAG, message)
         _lastError.value = message
     }
 
@@ -257,6 +263,7 @@ class BleRepository(private val context: Context) {
             }
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
+                    Log.d(TAG, "GATT connected")
                     _connectionState.value = ConnectionState.Connected(gatt.device.address)
                     gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                     gatt.requestMtu(185)
@@ -265,6 +272,7 @@ class BleRepository(private val context: Context) {
                 }
 
                 BluetoothProfile.STATE_DISCONNECTED -> {
+                    Log.d(TAG, "GATT disconnected")
                     disconnect()
                 }
             }
@@ -275,6 +283,7 @@ class BleRepository(private val context: Context) {
                 setError("Service discovery failed with status $status.")
                 return
             }
+            Log.d(TAG, "Services discovered")
             val serviceUuid = parseUuid(BleConfig.SERVICE_UUID) ?: return
             val commandUuid = parseUuid(BleConfig.COMMAND_CHAR_UUID) ?: return
             val service = gatt.getService(serviceUuid)
@@ -340,6 +349,7 @@ class BleRepository(private val context: Context) {
     }
 
     private companion object {
+        const val TAG = "HovercraftBLE"
         const val SCAN_DURATION_MS = 12_000L
         const val RSSI_INTERVAL_MS = 1_000L
     }

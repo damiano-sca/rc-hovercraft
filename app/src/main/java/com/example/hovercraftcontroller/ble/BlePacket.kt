@@ -9,14 +9,14 @@ object BlePacket {
     fun buildCommand(
         sequence: Int,
         throttle: Float,
-        rudder: Float,
+        rudderAngle: Int,
         arm: Boolean
     ): ByteArray {
         val payload = ByteArray(8)
         payload[0] = START_BYTE
         payload[1] = (sequence and 0xFF).toByte()
         payload[2] = scaleUnsigned(throttle)
-        payload[3] = scaleRudderAngle(rudder)
+        payload[3] = scaleRudderAngle(rudderAngle)
         payload[4] = buildFlags(arm = arm)
         payload[5] = 0
         payload[6] = crc8(payload, 6)
@@ -30,9 +30,7 @@ object BlePacket {
         return flags.toByte()
     }
 
-    private fun scaleRudderAngle(value: Float): Byte {
-        val clamped = value.coerceIn(-1f, 1f)
-        val angle = ((clamped + 1f) * 0.5f * 140f + 20f).roundToInt().coerceIn(20, 160)
+    private fun scaleRudderAngle(angle: Int): Byte {
         return angle.toByte()
     }
 

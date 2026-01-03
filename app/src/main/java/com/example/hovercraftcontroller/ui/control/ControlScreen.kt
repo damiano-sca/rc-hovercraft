@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -23,6 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -64,7 +66,7 @@ fun ControlRoute(
         onThrottleChange = viewModel::updateThrottle,
         onThrottleRelease = { viewModel.updateThrottle(0f) },
         onRudderChange = viewModel::updateRudder,
-        onRudderRelease = { viewModel.updateRudder(0f) }
+        onRudderRelease = viewModel::centerRudder
     )
 }
 
@@ -133,6 +135,8 @@ fun ControlScreen(
                 RudderPanel(
                     modifier = Modifier.weight(1f),
                     value = state.rudder,
+                    centerAngle = state.rudderCenter,
+                    maxAngle = state.rudderMaxAngle,
                     onValueChange = onRudderChange,
                     onValueRelease = onRudderRelease
                 )
@@ -195,8 +199,20 @@ private fun StatusStrip(state: ControlUiState) {
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        val rssiLabel = state.rssi?.let { "RSSI $it dBm" } ?: "RSSI --"
-        StatusPill(label = rssiLabel, color = MaterialTheme.colorScheme.secondary)
+        val rssiValue = state.rssi
+        val rssiLabel = when {
+            rssiValue == null -> "RSSI --"
+            rssiValue >= -60 -> "Good (RSSI $rssiValue dBm)"
+            rssiValue >= -75 -> "Average (RSSI $rssiValue dBm)"
+            else -> "Weak (RSSI $rssiValue dBm)"
+        }
+        val rssiColor = when {
+            rssiValue == null -> MaterialTheme.colorScheme.outline
+            rssiValue >= -60 -> Color(0xFF2FBF71)
+            rssiValue >= -75 -> Color(0xFFF2B705)
+            else -> Color(0xFFE05454)
+        }
+        StatusPill(label = rssiLabel, color = rssiColor)
         StatusPill(
             label = "${state.commandRateHz} Hz",
             color = MaterialTheme.colorScheme.tertiary
@@ -354,10 +370,13 @@ private fun CenterPanel(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RudderPanel(
     modifier: Modifier,
     value: Float,
+    centerAngle: Int,
+    maxAngle: Int,
     onValueChange: (Float) -> Unit,
     onValueRelease: () -> Unit
 ) {
@@ -375,7 +394,8 @@ private fun RudderPanel(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            val rudderAngle = rudderToAngle(value)
+            val minAngle = (centerAngle - maxAngle).coerceAtLeast(0)
+            val maxAngleBound = (centerAngle + maxAngle).coerceAtMost(180)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -389,7 +409,7 @@ private fun RudderPanel(
                 ) {
                     Text(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        text = "${rudderAngle.roundToInt()} deg",
+                        text = "${value.roundToInt()} °",
                         style = MaterialTheme.typography.labelMedium
                     )
                 }
@@ -399,17 +419,36 @@ private fun RudderPanel(
                 contentAlignment = Alignment.Center
             ) {
                 Slider(
-                    modifier = Modifier.fillMaxWidth(),
-                    value = rudderAngle,
-                    onValueChange = { angle -> onValueChange(angleToRudder(angle)) },
+                    modifier = Modifier.size(width = 280.dp, height = 72.dp),
+                    value = value,
+                    onValueChange = onValueChange,
                     onValueChangeFinished = onValueRelease,
-                    valueRange = 20f..160f
+                    valueRange = minAngle.toFloat()..maxAngleBound.toFloat(),
+                    track = {
+                        Box(
+                            Modifier
+                                .height(48.dp)
+                                .fillMaxWidth()
+                                .background(
+                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                                    RoundedCornerShape(999.dp)
+                                )
+                        )
+                    },
+                    thumb = {
+                        Box(
+                            Modifier
+                                .size(72.dp)
+                                .background(MaterialTheme.colorScheme.onSurface, CircleShape)
+                        )
+                    }
                 )
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun VerticalSlider(
     value: Float,
@@ -419,21 +458,28 @@ private fun VerticalSlider(
 ) {
     Box(modifier = modifier.rotate(-90f)) {
         Slider(
-            modifier = Modifier.size(width = 200.dp, height = 100.dp),
+            modifier = Modifier.size(width = 240.dp, height = 72.dp),
             value = value,
             onValueChange = onValueChange,
-            onValueChangeFinished = onValueRelease
+            onValueChangeFinished = onValueRelease,
+            track = {
+                Box(
+                    Modifier
+                        .height(48.dp)
+                        .fillMaxWidth()
+                        .background(
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                            RoundedCornerShape(999.dp)
+                        )
+                )
+            },
+            thumb = {
+                Box(
+                    Modifier
+                        .size(72.dp)
+                        .background(MaterialTheme.colorScheme.onSurface, CircleShape)
+                )
+            }
         )
     }
-}
-
-private fun rudderToAngle(value: Float): Float {
-    val clamped = value.coerceIn(-1f, 1f)
-    return ((clamped + 1f) * 0.5f * 140f + 20f).coerceIn(20f, 160f)
-}
-
-private fun angleToRudder(angle: Float): Float {
-    val clamped = angle.coerceIn(20f, 160f)
-    val normalized = ((clamped - 20f) / 140f) * 2f - 1f
-    return normalized.coerceIn(-1f, 1f)
 }

@@ -38,7 +38,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -94,12 +93,6 @@ fun ScanConnectRoute(
         } else {
             pendingScan = true
             requestPermissions()
-        }
-    }
-
-    LaunchedEffect(state.connectionState) {
-        if (state.connectionState is ConnectionState.Connected) {
-            onContinue()
         }
     }
 
@@ -173,17 +166,23 @@ fun ScanConnectScreen(
             }
 
             DeviceList(
+                modifier = Modifier.weight(1f, fill = true),
                 state = state,
                 onConnect = onConnect,
                 onDisconnect = onDisconnect
             )
 
             if (state.connectionState is ConnectionState.Connected) {
-                Button(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = onContinue
-                ) {
-                    Text(text = "Go to Controls")
+            Box(modifier = Modifier.fillMaxWidth().padding(0.dp, 24.dp)) {
+                    Button(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .align(Alignment.Center),
+                        onClick = onContinue
+                    ) {
+                        Text(text = "Let's rock and roll")
+                    }
                 }
             }
         }
@@ -326,11 +325,15 @@ private fun ControlRow(
 
 @Composable
 private fun DeviceList(
+    modifier: Modifier = Modifier,
     state: ScanConnectUiState,
     onConnect: (String) -> Unit,
     onDisconnect: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -340,9 +343,14 @@ private fun DeviceList(
         }
 
         if (state.devices.isEmpty()) {
-            EmptyState()
+            Box(modifier = Modifier.fillMaxSize()) {
+                EmptyState()
+            }
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f, fill = true),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 items(state.devices, key = { it.address }) { device ->
                     DeviceRow(
                         device = device,
@@ -362,7 +370,7 @@ private fun EmptyState() {
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
             Text(
                 text = "No devices yet",
                 style = MaterialTheme.typography.titleMedium,

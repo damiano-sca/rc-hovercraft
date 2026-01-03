@@ -69,52 +69,6 @@ static void applyOutputs(const CommandState &cmd) {
   applyRudder(cmd);
 }
 
-// Initializes serial logging for startup and status messages.
-static void initSerial() {
-  Serial.begin(115200);
-  Serial.println("Starting serial");
-}
-
-// Arms the ESC and sets the rudder to a known starting angle.
-static void initServos() {
-  throttleServo.attach(THROTTLE_PWM_PIN);
-  throttleServo.writeMicroseconds(THROTTLE_MIN_US);
-  rudderServo.attach(RUDDER_PWM_PIN);
-  rudderServo.write(RUDDER_DISARMED_ANGLE);
-  Serial.println("Servos initialized");
-}
-
-// Sets up BLE services, characteristics, and advertising.
-static void initBle() {
-  NimBLEDevice::init(DEVICE_NAME);
-  NimBLEDevice::setPower(ESP_PWR_LVL_P9);
-  Serial.println("BLE: init");
-
-  NimBLEServer *server = NimBLEDevice::createServer();
-  server->setCallbacks(new ServerCallbacks());
-  NimBLEService *service = server->createService(SERVICE_UUID);
-  NimBLECharacteristic *commandCharacteristic = service->createCharacteristic(
-      COMMAND_CHAR_UUID,
-      NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-
-  commandCharacteristic->setCallbacks(new CommandCallbacks());
-  service->start();
-
-  NimBLEAdvertising *advertising = NimBLEDevice::getAdvertising();
-  advertising->addServiceUUID(SERVICE_UUID);
-  NimBLEAdvertisementData advData;
-  advData.setName(DEVICE_NAME);
-  advData.setCompleteServices(NimBLEUUID(SERVICE_UUID));
-  advertising->setAdvertisementData(advData);
-
-  NimBLEAdvertisementData scanData;
-  scanData.setName(DEVICE_NAME);
-  advertising->setScanResponseData(scanData);
-  advertising->start();
-  Serial.print("BLE: advertising as ");
-  Serial.println(DEVICE_NAME);
-}
-
 class ServerCallbacks : public NimBLEServerCallbacks {
  public:
   void onConnect(NimBLEServer *server) {
@@ -184,6 +138,52 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
     applyOutputs(lastCommand);
   }
 };
+
+// Initializes serial logging for startup and status messages.
+static void initSerial() {
+  Serial.begin(115200);
+  Serial.println("Starting serial");
+}
+
+// Arms the ESC and sets the rudder to a known starting angle.
+static void initServos() {
+  throttleServo.attach(THROTTLE_PWM_PIN);
+  throttleServo.writeMicroseconds(THROTTLE_MIN_US);
+  rudderServo.attach(RUDDER_PWM_PIN);
+  rudderServo.write(RUDDER_DISARMED_ANGLE);
+  Serial.println("Servos initialized");
+}
+
+// Sets up BLE services, characteristics, and advertising.
+static void initBle() {
+  NimBLEDevice::init(DEVICE_NAME);
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9);
+  Serial.println("BLE: init");
+
+  NimBLEServer *server = NimBLEDevice::createServer();
+  server->setCallbacks(new ServerCallbacks());
+  NimBLEService *service = server->createService(SERVICE_UUID);
+  NimBLECharacteristic *commandCharacteristic = service->createCharacteristic(
+      COMMAND_CHAR_UUID,
+      NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+
+  commandCharacteristic->setCallbacks(new CommandCallbacks());
+  service->start();
+
+  NimBLEAdvertising *advertising = NimBLEDevice::getAdvertising();
+  advertising->addServiceUUID(SERVICE_UUID);
+  NimBLEAdvertisementData advData;
+  advData.setName(DEVICE_NAME);
+  advData.setCompleteServices(NimBLEUUID(SERVICE_UUID));
+  advertising->setAdvertisementData(advData);
+
+  NimBLEAdvertisementData scanData;
+  scanData.setName(DEVICE_NAME);
+  advertising->setScanResponseData(scanData);
+  advertising->start();
+  Serial.print("BLE: advertising as ");
+  Serial.println(DEVICE_NAME);
+}
 
 void setup() {
   initSerial();

@@ -15,28 +15,24 @@ private val Context.dataStore by preferencesDataStore("hovercraft_settings")
 class SettingsRepository(private val context: Context) {
     private object Keys {
         val commandRate = intPreferencesKey("command_rate_hz")
-        val sensitivity = floatPreferencesKey("sensitivity")
         val deadZone = floatPreferencesKey("dead_zone")
         val invertRudder = booleanPreferencesKey("invert_rudder")
-        val debugLogging = booleanPreferencesKey("debug_logging")
+        val rudderCenter = intPreferencesKey("rudder_center")
+        val rudderMaxAngle = intPreferencesKey("rudder_max_angle")
     }
 
     val settingsFlow: Flow<SettingsUiState> = context.dataStore.data.map { prefs ->
         SettingsUiState(
             commandRateHz = prefs[Keys.commandRate] ?: 60,
-            sensitivity = prefs[Keys.sensitivity] ?: 1.0f,
             deadZone = prefs[Keys.deadZone] ?: 0.05f,
             invertRudder = prefs[Keys.invertRudder] ?: false,
-            debugLogging = prefs[Keys.debugLogging] ?: false
+            rudderCenter = prefs[Keys.rudderCenter] ?: 90,
+            rudderMaxAngle = prefs[Keys.rudderMaxAngle] ?: 70
         )
     }
 
     suspend fun setCommandRate(rate: Int) {
         context.dataStore.edit { it[Keys.commandRate] = rate }
-    }
-
-    suspend fun setSensitivity(value: Float) {
-        context.dataStore.edit { it[Keys.sensitivity] = value }
     }
 
     suspend fun setDeadZone(value: Float) {
@@ -47,7 +43,18 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.invertRudder] = enabled }
     }
 
-    suspend fun setDebugLogging(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.debugLogging] = enabled }
+    suspend fun setRudderCenter(value: Int) {
+        context.dataStore.edit { it[Keys.rudderCenter] = value }
+    }
+
+    suspend fun setRudderMaxAngle(value: Int) {
+        context.dataStore.edit { it[Keys.rudderMaxAngle] = value }
+    }
+
+    suspend fun resetRudderDefaults() {
+        context.dataStore.edit {
+            it[Keys.rudderCenter] = 90
+            it[Keys.rudderMaxAngle] = 70
+        }
     }
 }

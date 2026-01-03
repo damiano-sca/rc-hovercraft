@@ -7,6 +7,7 @@ import com.example.hovercraftcontroller.HovercraftApplication
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlin.math.min
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val repository =
@@ -24,12 +25,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun setSensitivity(value: Float) {
-        viewModelScope.launch {
-            repository.setSensitivity(value.coerceIn(0.5f, 1.5f))
-        }
-    }
-
     fun setDeadZone(value: Float) {
         viewModelScope.launch {
             repository.setDeadZone(value.coerceIn(0f, 0.2f))
@@ -42,9 +37,33 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun setDebugLogging(enabled: Boolean) {
+    fun setRudderCenter(value: Int) {
         viewModelScope.launch {
-            repository.setDebugLogging(enabled)
+            val center = value.coerceIn(0, 180)
+            repository.setRudderCenter(center)
+            val maxAllowed = allowedMax(center)
+            val currentMax = uiState.value.rudderMaxAngle
+            if (currentMax > maxAllowed) {
+                repository.setRudderMaxAngle(maxAllowed)
+            }
         }
+    }
+
+    fun setRudderMaxAngle(value: Int) {
+        viewModelScope.launch {
+            val center = uiState.value.rudderCenter
+            val maxAllowed = allowedMax(center)
+            repository.setRudderMaxAngle(value.coerceIn(0, maxAllowed))
+        }
+    }
+
+    fun resetRudderDefaults() {
+        viewModelScope.launch {
+            repository.resetRudderDefaults()
+        }
+    }
+
+    private fun allowedMax(center: Int): Int {
+        return min(center, 180 - center)
     }
 }
