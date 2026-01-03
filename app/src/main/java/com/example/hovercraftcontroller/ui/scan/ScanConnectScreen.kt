@@ -181,7 +181,7 @@ fun ScanConnectScreen(
                             .align(Alignment.Center),
                         onClick = onContinue
                     ) {
-                        Text(text = "Let's rock and roll")
+                        Text(text = "Rock & Roll")
                     }
                 }
             }

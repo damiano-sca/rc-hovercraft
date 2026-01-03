@@ -4,17 +4,20 @@ import android.app.Activity
 import android.content.pm.ActivityInfo
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -22,8 +25,6 @@ import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -112,28 +113,31 @@ fun ControlScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             HeaderBar(
-                connectionState = state.connectionState,
+                state = state,
                 onBack = onBack,
                 onOpenSettings = onOpenSettings
             )
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ThrottlePanel(
-                    modifier = Modifier.weight(1f),
+            Box(modifier = Modifier.fillMaxSize()) {
+                ThrottleControl(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(bottom = 100.dp),
                     value = state.throttle,
                     onValueChange = onThrottleChange,
                     onValueRelease = onThrottleRelease
                 )
-                CenterPanel(
-                    modifier = Modifier.weight(1f),
+                ArmButton(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 8.dp)
+                        .width(220.dp),
                     state = state,
                     onToggleArm = onToggleArm
                 )
-                RudderPanel(
-                    modifier = Modifier.weight(1f),
+                RudderControl(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 40.dp),
                     value = state.rudder,
                     centerAngle = state.rudderCenter,
                     maxAngle = state.rudderMaxAngle,
@@ -147,85 +151,60 @@ fun ControlScreen(
 
 @Composable
 private fun HeaderBar(
-    connectionState: ConnectionState,
+    state: ControlUiState,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
+    val scrollState = rememberScrollState()
+    val rssiValue = state.rssi
+    val rssiLabel = when {
+        rssiValue == null -> "RSSI --"
+        rssiValue >= -60 -> "Good (RSSI $rssiValue dBm)"
+        rssiValue >= -75 -> "Average (RSSI $rssiValue dBm)"
+        else -> "Weak (RSSI $rssiValue dBm)"
+    }
+    val rssiColor = when {
+        rssiValue == null -> MaterialTheme.colorScheme.outline
+        rssiValue >= -60 -> Color(0xFF2FBF71)
+        rssiValue >= -75 -> Color(0xFFF2B705)
+        else -> Color(0xFFE05454)
+    }
+    val armColor = if (state.isArmed) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.outline
+    }
+    val throttleLabel = "Throttle ${(state.throttle * 100f).roundToInt()}%"
+    val rudderLabel = "Rudder ${state.rudder.roundToInt()}°"
+
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(scrollState),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val dotColor = when (connectionState) {
-            is ConnectionState.Connected -> Color(0xFF35C46A)
-            is ConnectionState.Connecting -> Color(0xFFF0B14A)
-            ConnectionState.Disconnected -> MaterialTheme.colorScheme.outline
-        }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Control",
-                style = MaterialTheme.typography.headlineMedium
+        StatusPill(label = throttleLabel, color = MaterialTheme.colorScheme.secondary)
+        Spacer(modifier = Modifier.weight(1f))
+        IconButton(onClick = onBack) {
+            Icon(
+                imageVector = Icons.Filled.Bluetooth,
+                contentDescription = "Bluetooth"
             )
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(dotColor)
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            IconButton(onClick = onOpenSettings) {
-                Icon(
-                    imageVector = Icons.Filled.Settings,
-                    contentDescription = "Settings"
-                )
-            }
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.Filled.Bluetooth,
-                    contentDescription = "Bluetooth"
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatusStrip(state: ControlUiState) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        val rssiValue = state.rssi
-        val rssiLabel = when {
-            rssiValue == null -> "RSSI --"
-            rssiValue >= -60 -> "Good (RSSI $rssiValue dBm)"
-            rssiValue >= -75 -> "Average (RSSI $rssiValue dBm)"
-            else -> "Weak (RSSI $rssiValue dBm)"
-        }
-        val rssiColor = when {
-            rssiValue == null -> MaterialTheme.colorScheme.outline
-            rssiValue >= -60 -> Color(0xFF2FBF71)
-            rssiValue >= -75 -> Color(0xFFF2B705)
-            else -> Color(0xFFE05454)
         }
         StatusPill(label = rssiLabel, color = rssiColor)
-        StatusPill(
-            label = "${state.commandRateHz} Hz",
-            color = MaterialTheme.colorScheme.tertiary
-        )
-        val armColor = if (state.isArmed) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.outline
+        StatusPill(label = "${state.commandRateHz} Hz", color = MaterialTheme.colorScheme.tertiary)
+        StatusPill(label = if (state.isArmed) "ARMED" else "SAFE", color = armColor)
+        IconButton(onClick = onOpenSettings) {
+            Icon(
+                imageVector = Icons.Filled.Settings,
+                contentDescription = "Settings"
+            )
         }
-        StatusPill(
-            label = if (state.isArmed) "ARMED" else "SAFE",
-            color = armColor
-        )
+        Spacer(modifier = Modifier.weight(1f))
+        StatusPill(label = rudderLabel, color = MaterialTheme.colorScheme.primary)
+
+
     }
 }
 
@@ -253,126 +232,56 @@ private fun StatusPill(label: String, color: Color) {
 }
 
 @Composable
-private fun ActionRow(
+private fun ArmButton(
     state: ControlUiState,
-    onToggleArm: () -> Unit
+    onToggleArm: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center
-    ) {
-        Button(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = onToggleArm,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (state.isArmed) {
-                    MaterialTheme.colorScheme.secondary
-                } else {
-                    MaterialTheme.colorScheme.surface
-                },
-                contentColor = if (state.isArmed) {
-                    MaterialTheme.colorScheme.onSecondary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                }
-            ),
-            border = if (!state.isArmed) {
-                BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    Button(
+        modifier = modifier,
+        onClick = onToggleArm,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (state.isArmed) {
+                MaterialTheme.colorScheme.secondary
             } else {
-                null
+                MaterialTheme.colorScheme.surface
+            },
+            contentColor = if (state.isArmed) {
+                MaterialTheme.colorScheme.onSecondary
+            } else {
+                MaterialTheme.colorScheme.onSurface
             }
-        ) {
-            Text(text = if (state.isArmed) "DISARM" else "ARM")
+        ),
+        border = if (!state.isArmed) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        } else {
+            null
         }
+    ) {
+        Text(text = if (state.isArmed) "DISARM" else "ARM")
     }
 }
 
 @Composable
-private fun ThrottlePanel(
+private fun ThrottleControl(
     modifier: Modifier,
     value: Float,
     onValueChange: (Float) -> Unit,
     onValueRelease: () -> Unit
 ) {
-    Card(
-        modifier = modifier.fillMaxHeight(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+    Box(modifier = modifier) {
+        VerticalSlider(
+            value = value,
+            onValueChange = onValueChange,
+            onValueRelease = onValueRelease
         )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(text = "Throttle", style = MaterialTheme.typography.titleMedium)
-                Surface(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        text = "${(value * 100).roundToInt()}%",
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                }
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                VerticalSlider(
-                    value = value,
-                    onValueChange = onValueChange,
-                    onValueRelease = onValueRelease
-                )
-            }
-        }
     }
 }
 
-@Composable
-private fun CenterPanel(
-    modifier: Modifier,
-    state: ControlUiState,
-    onToggleArm: () -> Unit
-) {
-    Card(
-        modifier = modifier.fillMaxHeight(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceAround
-        ) {
-            StatusStrip(state)
-            ActionRow(
-                state = state,
-                onToggleArm = onToggleArm
-            )
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RudderPanel(
+private fun RudderControl(
     modifier: Modifier,
     value: Float,
     centerAngle: Int,
@@ -380,71 +289,34 @@ private fun RudderPanel(
     onValueChange: (Float) -> Unit,
     onValueRelease: () -> Unit
 ) {
-    Card(
-        modifier = modifier.fillMaxHeight(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            val minAngle = (centerAngle - maxAngle).coerceAtLeast(0)
-            val maxAngleBound = (centerAngle + maxAngle).coerceAtMost(180)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(text = "Rudder", style = MaterialTheme.typography.titleMedium)
-                Surface(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        text = "${value.roundToInt()} °",
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                }
-            }
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Slider(
-                    modifier = Modifier.size(width = 280.dp, height = 72.dp),
-                    value = value,
-                    onValueChange = onValueChange,
-                    onValueChangeFinished = onValueRelease,
-                    valueRange = minAngle.toFloat()..maxAngleBound.toFloat(),
-                    track = {
-                        Box(
-                            Modifier
-                                .height(48.dp)
-                                .fillMaxWidth()
-                                .background(
-                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
-                                    RoundedCornerShape(999.dp)
-                                )
+    val minAngle = (centerAngle - maxAngle).coerceAtLeast(0)
+    val maxAngleBound = (centerAngle + maxAngle).coerceAtMost(180)
+    Box(modifier = modifier) {
+        Slider(
+            modifier = Modifier.size(width = 280.dp, height = 72.dp),
+            value = value,
+            onValueChange = onValueChange,
+            onValueChangeFinished = onValueRelease,
+            valueRange = minAngle.toFloat()..maxAngleBound.toFloat(),
+            track = {
+                Box(
+                    Modifier
+                        .height(48.dp)
+                        .fillMaxWidth()
+                        .background(
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                            RoundedCornerShape(999.dp)
                         )
-                    },
-                    thumb = {
-                        Box(
-                            Modifier
-                                .size(72.dp)
-                                .background(MaterialTheme.colorScheme.onSurface, CircleShape)
-                        )
-                    }
+                )
+            },
+            thumb = {
+                Box(
+                    Modifier
+                        .size(72.dp)
+                        .background(MaterialTheme.colorScheme.onSurface, CircleShape)
                 )
             }
-        }
+        )
     }
 }
 
