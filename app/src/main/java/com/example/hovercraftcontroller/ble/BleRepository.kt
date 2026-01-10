@@ -8,6 +8,7 @@ import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGatt.GATT_SUCCESS
+import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
@@ -28,41 +29,76 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.ArrayDeque
 import java.util.UUID
+import kotlin.math.roundToInt
 
+/**
+ * BLE data source that handles scanning, connecting, and GATT telemetry.
+ *
+ * Exposes connection and telemetry state as flows for UI consumption.
+ */
 class BleRepository(private val context: Context) {
+    // Android Bluetooth handles.
     private val bluetoothManager =
         context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager?
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager?.adapter
 
+    // Coroutine scope for background BLE work.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    // Deduped scan results keyed by device address.
     private val discoveredDevices = LinkedHashMap<String, BleDevice>()
 
+    // Scan status for observers.
     private val _scanStatus = MutableStateFlow(ScanStatus.Idle)
     val scanStatus = _scanStatus.asStateFlow()
 
+    // List of discovered peripherals sorted by RSSI.
     private val _devices = MutableStateFlow<List<BleDevice>>(emptyList())
     val devices = _devices.asStateFlow()
 
+    // Connection lifecycle state.
     private val _connectionState =
         MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState = _connectionState.asStateFlow()
 
+    // Latest user-facing error message.
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError = _lastError.asStateFlow()
 
+    // Latest RSSI reading from the active connection.
     private val _rssi = MutableStateFlow<Int?>(null)
     val rssi = _rssi.asStateFlow()
 
+    // Latest battery telemetry from GATT notifications.
+    private val _batteryState = MutableStateFlow(BatteryState())
+    val batteryState = _batteryState.asStateFlow()
+
+    // Scan session handles.
     private var scanner: BluetoothLeScanner? = null
     private var scanCallback: ScanCallback? = null
     private var scanJob: Job? = null
 
+    // Active GATT connection handles.
     private var currentGatt: BluetoothGatt? = null
     private var commandCharacteristic: BluetoothGattCharacteristic? = null
     private var rssiJob: Job? = null
+    // Serialize descriptor writes to avoid overlapping GATT operations.
+    private val descriptorWriteQueue = ArrayDeque<DescriptorWrite>()
+    private var isWritingDescriptor = false
+    private var pendingRssiStart = false
 
+    // UUIDs for services and characteristics.
+    private val voltageServiceUuid = UUID.fromString(BleConfig.VOLTAGE_SERVICE_UUID)
+    private val voltageCharUuid = UUID.fromString(BleConfig.VOLTAGE_CHAR_UUID)
+    private val cccdUuid = UUID.fromString(BleConfig.CCCD_UUID)
+
+    /**
+     * Start a time-boxed BLE scan and publish discovered devices.
+     */
     @SuppressLint("MissingPermission")
     fun startScan() {
         Log.d(TAG, "Start scan")
@@ -122,6 +158,9 @@ class BleRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Stop an active BLE scan and reset the scan status.
+     */
     @SuppressLint("MissingPermission")
     fun stopScan() {
         if (_scanStatus.value != ScanStatus.Scanning) {
@@ -139,6 +178,9 @@ class BleRepository(private val context: Context) {
         _scanStatus.value = ScanStatus.Idle
     }
 
+    /**
+     * Connect to a peripheral by address and discover services.
+     */
     @SuppressLint("MissingPermission")
     fun connect(address: String) {
         Log.d(TAG, "Connect to $address")
@@ -153,6 +195,7 @@ class BleRepository(private val context: Context) {
         }
         stopScan()
         disconnect()
+        _batteryState.value = BatteryState()
 
         val device = adapter.getRemoteDevice(address)
         _connectionState.value = ConnectionState.Connecting(address)
@@ -169,19 +212,29 @@ class BleRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Disconnect from the current peripheral and clear cached state.
+     */
     @SuppressLint("MissingPermission")
     fun disconnect() {
         Log.d(TAG, "Disconnect")
         rssiJob?.cancel()
         rssiJob = null
+        descriptorWriteQueue.clear()
+        isWritingDescriptor = false
+        pendingRssiStart = false
         currentGatt?.disconnect()
         currentGatt?.close()
         currentGatt = null
         commandCharacteristic = null
         _rssi.value = null
+        _batteryState.value = BatteryState()
         _connectionState.value = ConnectionState.Disconnected
     }
 
+    /**
+     * Send a command packet to the control characteristic.
+     */
     @SuppressLint("MissingPermission")
     fun sendCommand(packet: ByteArray): Boolean {
         val gatt = currentGatt ?: return false
@@ -200,11 +253,17 @@ class BleRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Record an error for observers and log it.
+     */
     fun setError(message: String) {
         Log.w(TAG, message)
         _lastError.value = message
     }
 
+    /**
+     * Build a scan callback that updates the in-memory device list.
+     */
     private fun createScanCallback(): ScanCallback {
         return object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
@@ -222,6 +281,9 @@ class BleRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Insert or update a device entry and keep the list sorted by RSSI.
+     */
     @SuppressLint("MissingPermission")
     private fun addOrUpdateDevice(result: ScanResult) {
         if (!hasBluetoothScanPermission()) {
@@ -244,10 +306,14 @@ class BleRepository(private val context: Context) {
         _devices.value = sortedDevices
     }
 
+    /**
+     * Provide scan filters; empty list means no filtering.
+     */
     private fun buildFilters(): List<ScanFilter> {
         return emptyList()
     }
 
+    // Handles GATT lifecycle and characteristic updates.
     private val gattCallback = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
@@ -268,7 +334,6 @@ class BleRepository(private val context: Context) {
                     gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                     gatt.requestMtu(185)
                     gatt.discoverServices()
-                    startRssiUpdates(gatt)
                 }
 
                 BluetoothProfile.STATE_DISCONNECTED -> {
@@ -292,6 +357,58 @@ class BleRepository(private val context: Context) {
                 setError("Command characteristic not found.")
             }
             commandCharacteristic = characteristic
+
+            val voltageCharacteristic = gatt.getService(voltageServiceUuid)
+                ?.getCharacteristic(voltageCharUuid)
+            if (voltageCharacteristic != null) {
+                enableNotifications(gatt, voltageCharacteristic)
+            } else {
+                Log.d(TAG, "Voltage characteristic not found.")
+            }
+            pendingRssiStart = true
+            maybeStartRssiUpdates(gatt)
+        }
+
+        // API < 33 callback; kept for backwards compatibility.
+        override fun onCharacteristicRead(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int
+        ) {
+            if (status != GATT_SUCCESS) {
+                return
+            }
+            handleCharacteristicUpdate(characteristic, characteristic.value)
+        }
+
+        // API 33+ callback; provides the value directly.
+        override fun onCharacteristicRead(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray,
+            status: Int
+        ) {
+            if (status != GATT_SUCCESS) {
+                return
+            }
+            handleCharacteristicUpdate(characteristic, value)
+        }
+
+        // API < 33 callback; value read from characteristic.
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic
+        ) {
+            handleCharacteristicUpdate(characteristic, characteristic.value)
+        }
+
+        // API 33+ callback; provides the value directly.
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray
+        ) {
+            handleCharacteristicUpdate(characteristic, value)
         }
 
         override fun onReadRemoteRssi(gatt: BluetoothGatt, rssi: Int, status: Int) {
@@ -299,8 +416,23 @@ class BleRepository(private val context: Context) {
                 _rssi.value = rssi
             }
         }
+
+        override fun onDescriptorWrite(
+            gatt: BluetoothGatt,
+            descriptor: BluetoothGattDescriptor,
+            status: Int
+        ) {
+            if (status != GATT_SUCCESS) {
+                Log.w(TAG, "Descriptor write failed for ${descriptor.uuid} (status $status)")
+            }
+            isWritingDescriptor = false
+            writeNextDescriptor()
+        }
     }
 
+    /**
+     * Periodically read RSSI while connected.
+     */
     @SuppressLint("MissingPermission")
     private fun startRssiUpdates(gatt: BluetoothGatt) {
         rssiJob?.cancel()
@@ -314,6 +446,138 @@ class BleRepository(private val context: Context) {
         }
     }
 
+    private fun maybeStartRssiUpdates(gatt: BluetoothGatt) {
+        if (!pendingRssiStart) {
+            return
+        }
+        if (isWritingDescriptor || descriptorWriteQueue.isNotEmpty()) {
+            return
+        }
+        pendingRssiStart = false
+        startRssiUpdates(gatt)
+    }
+
+    private fun enqueueDescriptorWrite(
+        gatt: BluetoothGatt,
+        descriptor: BluetoothGattDescriptor
+    ) {
+        descriptorWriteQueue.addLast(DescriptorWrite(gatt, descriptor))
+        if (!isWritingDescriptor) {
+            writeNextDescriptor()
+        }
+    }
+
+    private fun writeNextDescriptor() {
+        val next = descriptorWriteQueue.pollFirst()
+        if (next == null) {
+            isWritingDescriptor = false
+            currentGatt?.let { maybeStartRssiUpdates(it) }
+            return
+        }
+        isWritingDescriptor = true
+        val started = next.gatt.writeDescriptor(next.descriptor)
+        if (!started) {
+            isWritingDescriptor = false
+            writeNextDescriptor()
+        }
+    }
+
+    /**
+     * Read a characteristic value once.
+     */
+    @SuppressLint("MissingPermission")
+    private fun readCharacteristic(
+        gatt: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic
+    ) {
+        if (!hasBluetoothConnectPermission()) {
+            setError("Bluetooth connect permission is missing.")
+            return
+        }
+        try {
+            gatt.readCharacteristic(characteristic)
+        } catch (e: SecurityException) {
+            setError("Bluetooth connect permission is missing.")
+        }
+    }
+
+    /**
+     * Enable notifications for a characteristic by writing the CCCD.
+     */
+    @SuppressLint("MissingPermission")
+    private fun enableNotifications(
+        gatt: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic
+    ) {
+        if (!hasBluetoothConnectPermission()) {
+            setError("Bluetooth connect permission is missing.")
+            return
+        }
+        try {
+            val enabled = gatt.setCharacteristicNotification(characteristic, true)
+            if (!enabled) {
+                Log.w(TAG, "Failed to enable notifications for ${characteristic.uuid}")
+            }
+            val descriptor = characteristic.getDescriptor(cccdUuid)
+            if (descriptor == null) {
+                Log.w(TAG, "CCCD descriptor missing for ${characteristic.uuid}")
+                return
+            }
+            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            enqueueDescriptorWrite(gatt, descriptor)
+        } catch (e: SecurityException) {
+            setError("Bluetooth connect permission is missing.")
+        }
+    }
+
+    private data class DescriptorWrite(
+        val gatt: BluetoothGatt,
+        val descriptor: BluetoothGattDescriptor
+    )
+
+    /**
+     * Route incoming characteristic updates to the appropriate handler.
+     */
+    private fun handleCharacteristicUpdate(
+        characteristic: BluetoothGattCharacteristic,
+        value: ByteArray?
+    ) {
+        val payload = value ?: return
+        Log.d(
+            TAG,
+            "GATT update ${characteristic.uuid}: ${payload.size} bytes [${toHex(payload)}]"
+        )
+        when (characteristic.uuid) {
+            voltageCharUuid -> updateBatteryVoltage(payload)
+        }
+    }
+
+    /**
+     * Update the battery voltage from a two-byte little-endian payload.
+     */
+    private fun updateBatteryVoltage(value: ByteArray) {
+        if (value.size < 2) {
+            return
+        }
+        val voltageMv = if (value.size >= 4) {
+            val voltageV = ByteBuffer.wrap(value).order(ByteOrder.LITTLE_ENDIAN).float
+            (voltageV * 1000f).roundToInt()
+        } else {
+            ((value[1].toInt() and 0xFF) shl 8) or (value[0].toInt() and 0xFF)
+        }
+        val percent = batteryPercentFromVoltage(voltageMv)
+        Log.d(TAG, "Battery voltage update: ${voltageMv}mV (${percent}%)")
+        val current = _batteryState.value
+        _batteryState.value = current.copy(
+            voltageMv = voltageMv,
+            percent = percent,
+            timestampMs = System.currentTimeMillis()
+        )
+    }
+
+    /**
+     * Check scan-related permissions across API levels.
+     */
     private fun hasBluetoothScanPermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(
@@ -328,6 +592,9 @@ class BleRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Check connect-related permissions across API levels.
+     */
     private fun hasBluetoothConnectPermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(
@@ -339,6 +606,9 @@ class BleRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Parse a UUID and emit an error when invalid.
+     */
     private fun parseUuid(raw: String): UUID? {
         return try {
             UUID.fromString(raw)
@@ -348,9 +618,35 @@ class BleRepository(private val context: Context) {
         }
     }
 
+    private fun toHex(bytes: ByteArray): String {
+        return bytes.joinToString(separator = " ") { byte ->
+            (byte.toInt() and 0xFF).toString(16).padStart(2, '0')
+        }
+    }
+
+    private fun batteryPercentFromVoltage(voltageMv: Int): Int {
+        if (voltageMv <= 0) {
+            return 0
+        }
+        val voltage = voltageMv / 1000.0
+        if (BATTERY_FULL_V <= BATTERY_EMPTY_V) {
+            return 0
+        }
+        val percent = when {
+            voltage <= BATTERY_EMPTY_V -> 0.0
+            voltage >= BATTERY_FULL_V -> 100.0
+            else -> (voltage - BATTERY_EMPTY_V) * 100.0 / (BATTERY_FULL_V - BATTERY_EMPTY_V)
+        }
+        return percent.roundToInt().coerceIn(0, 100)
+    }
+
     private companion object {
+        // Logging and timing constants.
         const val TAG = "HovercraftBLE"
         const val SCAN_DURATION_MS = 12_000L
         const val RSSI_INTERVAL_MS = 1_000L
+        // Keep in sync with firmware battery thresholds.
+        const val BATTERY_FULL_V = 8.40
+        const val BATTERY_EMPTY_V = 6.60
     }
 }

@@ -139,8 +139,6 @@ fun ControlScreen(
                         .align(Alignment.BottomEnd)
                         .padding(bottom = 40.dp),
                     value = state.rudder,
-                    centerAngle = state.rudderCenter,
-                    maxAngle = state.rudderMaxAngle,
                     onValueChange = onRudderChange,
                     onValueRelease = onRudderRelease
                 )
@@ -174,8 +172,15 @@ private fun HeaderBar(
     } else {
         MaterialTheme.colorScheme.outline
     }
+    val batteryPercentLabel = state.batteryState.percent?.let { "Battery $it%" } ?: "Battery --"
     val throttleLabel = "Throttle ${(state.throttle * 100f).roundToInt()}%"
-    val rudderLabel = "Rudder ${state.rudder.roundToInt()}°"
+    val rudderPercent = (state.rudder * 100f).roundToInt().coerceIn(-100, 100)
+    val rudderDisplay = when {
+        rudderPercent == 0 -> "0"
+        rudderPercent > 0 -> "+${rudderPercent}%"
+        else -> "${rudderPercent}%"
+    }
+    val rudderLabel = "Rudder $rudderDisplay"
 
     Row(
         modifier = Modifier
@@ -189,16 +194,19 @@ private fun HeaderBar(
         IconButton(onClick = onBack) {
             Icon(
                 imageVector = Icons.Filled.Bluetooth,
-                contentDescription = "Bluetooth"
+                contentDescription = "Bluetooth",
+                tint = MaterialTheme.colorScheme.onSurface
             )
         }
         StatusPill(label = rssiLabel, color = rssiColor)
+        StatusPill(label = batteryPercentLabel, color = MaterialTheme.colorScheme.secondary)
         StatusPill(label = "${state.commandRateHz} Hz", color = MaterialTheme.colorScheme.tertiary)
         StatusPill(label = if (state.isArmed) "ARMED" else "SAFE", color = armColor)
         IconButton(onClick = onOpenSettings) {
             Icon(
                 imageVector = Icons.Filled.Settings,
-                contentDescription = "Settings"
+                contentDescription = "Settings",
+                tint = MaterialTheme.colorScheme.onSurface
             )
         }
         Spacer(modifier = Modifier.weight(1f))
@@ -284,20 +292,16 @@ private fun ThrottleControl(
 private fun RudderControl(
     modifier: Modifier,
     value: Float,
-    centerAngle: Int,
-    maxAngle: Int,
     onValueChange: (Float) -> Unit,
     onValueRelease: () -> Unit
 ) {
-    val minAngle = (centerAngle - maxAngle).coerceAtLeast(0)
-    val maxAngleBound = (centerAngle + maxAngle).coerceAtMost(180)
     Box(modifier = modifier) {
         Slider(
             modifier = Modifier.size(width = 280.dp, height = 72.dp),
             value = value,
             onValueChange = onValueChange,
             onValueChangeFinished = onValueRelease,
-            valueRange = minAngle.toFloat()..maxAngleBound.toFloat(),
+            valueRange = -1f..1f,
             track = {
                 Box(
                     Modifier

@@ -39,7 +39,7 @@ class ControlViewModel(application: Application) : AndroidViewModel(application)
                             connectionState = state,
                             isArmed = false,
                             throttle = 0f,
-                            rudder = settingsState.rudderCenter.toFloat()
+                            rudder = 0f
                         )
                     } else {
                         current.copy(connectionState = state)
@@ -54,11 +54,16 @@ class ControlViewModel(application: Application) : AndroidViewModel(application)
             }
         }
         viewModelScope.launch {
+            bleRepository.batteryState.collectLatest { batteryState ->
+                _uiState.update { it.copy(batteryState = batteryState) }
+            }
+        }
+        viewModelScope.launch {
             settingsRepository.settingsFlow.collectLatest { settings ->
                 settingsState = settings
                 _uiState.update { current ->
                     val rudderValue = if (!current.isArmed) {
-                        settings.rudderCenter.toFloat()
+                        0f
                     } else {
                         current.rudder
                     }
@@ -81,7 +86,7 @@ class ControlViewModel(application: Application) : AndroidViewModel(application)
                 it.copy(
                     isArmed = false,
                     throttle = 0f,
-                    rudder = settingsState.rudderCenter.toFloat()
+                    rudder = 0f
                 )
             }
             sendDisarm()
@@ -103,11 +108,11 @@ class ControlViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun updateRudder(value: Float) {
-        _uiState.update { it.copy(rudder = value) }
+        _uiState.update { it.copy(rudder = value.coerceIn(-1f, 1f)) }
     }
 
     fun centerRudder() {
-        _uiState.update { it.copy(rudder = settingsState.rudderCenter.toFloat()) }
+        _uiState.update { it.copy(rudder = 0f) }
     }
 
     private fun updateStreaming() {
@@ -164,23 +169,20 @@ class ControlViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun applyRudderAngle(value: Float): Int {
-        val center = settingsState.rudderCenter.coerceIn(0, 180)
+        val center = settingsState.rudderCenter
         val maxDelta = settingsState.rudderMaxAngle
-            .coerceIn(0, minOf(center, 180 - center))
         if (maxDelta == 0) {
             return center
         }
-        val minAngle = (center - maxDelta).toFloat()
-        val maxAngle = (center + maxDelta).toFloat()
-        val clamped = value.coerceIn(minAngle, maxAngle)
-        var normalized = (clamped - center) / maxDelta.toFloat()
+        var normalized = value.coerceIn(-1f, 1f)
         if (abs(normalized) < settingsState.deadZone) {
             normalized = 0f
         }
         if (settingsState.invertRudder) {
             normalized = -normalized
         }
-        val finalAngle = center + (normalized.coerceIn(-1f, 1f) * maxDelta)
+        val finalAngle = center + (normalized * maxDelta);
+
         return finalAngle.roundToInt()
     }
 }

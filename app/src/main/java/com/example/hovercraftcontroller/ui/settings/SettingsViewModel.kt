@@ -7,7 +7,6 @@ import com.example.hovercraftcontroller.HovercraftApplication
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlin.math.min
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val repository =
@@ -39,21 +38,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setRudderCenter(value: Int) {
         viewModelScope.launch {
-            val center = value.coerceIn(0, 180)
-            repository.setRudderCenter(center)
-            val maxAllowed = allowedMax(center)
-            val currentMax = uiState.value.rudderMaxAngle
-            if (currentMax > maxAllowed) {
-                repository.setRudderMaxAngle(maxAllowed)
-            }
+            repository.setRudderCenter(value)
         }
     }
 
     fun setRudderMaxAngle(value: Int) {
         viewModelScope.launch {
-            val center = uiState.value.rudderCenter
-            val maxAllowed = allowedMax(center)
-            repository.setRudderMaxAngle(value.coerceIn(0, maxAllowed))
+            repository.setRudderMaxAngle(value)
         }
     }
 
@@ -63,7 +54,4 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private fun allowedMax(center: Int): Int {
-        return min(center, 180 - center)
-    }
 }

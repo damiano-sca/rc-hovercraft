@@ -5,6 +5,7 @@
 static const char *DEVICE_NAME = "Wobble Wagon";
 static const char *SERVICE_UUID = "0000FEED-0000-1000-8000-00805F9B34FB";
 static const char *COMMAND_CHAR_UUID = "0000BEEF-0000-1000-8000-00805F9B34FB";
+static const char *BATTERY_CHAR_UUID = "0000BABA-0000-1000-8000-00805F9B34FB";
 
 static const uint8_t START_BYTE = 0xA5;
 static const uint8_t END_BYTE = 0x5A;
@@ -12,12 +13,32 @@ static const uint8_t FLAG_ARM = 0x01;
 
 static const uint32_t FAILSAFE_MS = 250;
 
-static const int THROTTLE_PWM_PIN = 7;
+// Battery voltage monitoring
+static const int BATTERY_ADC_PIN = 15;
+
+// ADC characteristics
+static const float ADC_REF_VOLTAGE = 3.3f;
+static const float ADC_MAX = 4095.0f;
+
+// Voltage divider values (R1: battery -> pin, R2: pin -> GND)
+static const float BATTERY_R1 = 10030.0f;
+static const float BATTERY_R2 = 4350.0f;
+
+// Battery voltage range (used in the Android app percent calculation).
+static const float BATTERY_FULL_V = 8.40f;
+static const float BATTERY_EMPTY_V = 6.60f;
+
+// Battery print/notify interval
+static const uint32_t BATTERY_PRINT_MS = 5000;
+
+static const int THROTTLE_PWM_PIN = 17;
 static const int THROTTLE_MIN_US = 1000;
 static const int THROTTLE_MAX_US = 2000;
 
-static const int RUDDER_PWM_PIN = 8;
+static const int RUDDER_PWM_PIN = 18;
 static const uint8_t RUDDER_DISARMED_ANGLE = 0;
+static const int RUDDER_MIN_US = 500;
+static const int RUDDER_MAX_US = 2500;
 
 static Servo throttleServo;
 static Servo rudderServo;
@@ -30,6 +51,11 @@ struct CommandState {
 
 static CommandState lastCommand;
 static uint32_t lastPacketMs = 0;
+
+
+static uint32_t lastBatteryPrintMs = 0;
+static NimBLECharacteristic *batteryCharacteristic = nullptr;
+
 
 static uint8_t crc8(const uint8_t *data, size_t length) {
   uint8_t crc = 0;
@@ -46,6 +72,16 @@ static uint8_t crc8(const uint8_t *data, size_t length) {
   return crc;
 }
 
+static float readBatteryVoltage() {
+  int raw = analogRead(BATTERY_ADC_PIN);
+
+  float vPin = (raw / ADC_MAX) * ADC_REF_VOLTAGE;
+  float vBattery = vPin * ((BATTERY_R1 + BATTERY_R2) / BATTERY_R2);
+
+  return vBattery;
+}
+
+
 static void applyThrottle(const CommandState &cmd) {
   uint8_t throttle = cmd.armed ? cmd.throttle : 0;
 
@@ -58,10 +94,14 @@ static void applyThrottle(const CommandState &cmd) {
 
 static void applyRudder(const CommandState &cmd) {
   uint8_t rudderAngle = cmd.armed ? cmd.rudderAngle : RUDDER_DISARMED_ANGLE;
-  rudderServo.write(rudderAngle);
+  int rudderUs = map(rudderAngle, 0, 255, RUDDER_MIN_US, RUDDER_MAX_US);
+  rudderServo.writeMicroseconds(rudderUs);
   
   Serial.print("Rudder angle: ");
-  Serial.println(rudderAngle);
+  Serial.print(rudderAngle);
+  Serial.print(" (");
+  Serial.print(rudderUs);
+  Serial.println(" us)");
 }
 
 static void applyOutputs(const CommandState &cmd) {
@@ -149,9 +189,16 @@ static void initSerial() {
 static void initServos() {
   throttleServo.attach(THROTTLE_PWM_PIN);
   throttleServo.writeMicroseconds(THROTTLE_MIN_US);
-  rudderServo.attach(RUDDER_PWM_PIN);
-  rudderServo.write(RUDDER_DISARMED_ANGLE);
+  rudderServo.attach(RUDDER_PWM_PIN, RUDDER_MIN_US, RUDDER_MAX_US);
+  rudderServo.writeMicroseconds(map(RUDDER_DISARMED_ANGLE, 0, 255, RUDDER_MIN_US, RUDDER_MAX_US));
   Serial.println("Servos initialized");
+}
+
+// Configures the ADC input used to sample battery voltage.
+static void initBatteryAdc() {
+  analogReadResolution(12);        // 0–4095
+  analogSetAttenuation(ADC_11db);  // Full 0–3.3V range
+  Serial.println("Battery ADC initialized");
 }
 
 // Sets up BLE services, characteristics, and advertising.
@@ -168,6 +215,12 @@ static void initBle() {
       NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
 
   commandCharacteristic->setCallbacks(new CommandCallbacks());
+
+  batteryCharacteristic = service->createCharacteristic(
+      BATTERY_CHAR_UUID,
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+  float initialVoltage = 0.0f;
+  batteryCharacteristic->setValue(reinterpret_cast<uint8_t *>(&initialVoltage), sizeof(initialVoltage));
   service->start();
 
   NimBLEAdvertising *advertising = NimBLEDevice::getAdvertising();
@@ -187,6 +240,7 @@ static void initBle() {
 
 void setup() {
   initSerial();
+  initBatteryAdc();
   initServos();
   initBle();
 
@@ -196,12 +250,28 @@ void setup() {
 void loop() {
   if (millis() - lastPacketMs > FAILSAFE_MS) {
     // Only drive outputs if we need to return to the disarmed state.
-    if (lastCommand.throttle != 0 || lastCommand.rudderAngle != RUDDER_DISARMED_ANGLE || lastCommand.armed) {
+    if (lastCommand.throttle != 0  || lastCommand.armed) {
       lastCommand.throttle = 0;
-      lastCommand.rudderAngle = RUDDER_DISARMED_ANGLE;
       lastCommand.armed = false;
       applyOutputs(lastCommand);
     }
   }
+
+  // Periodic battery voltage print + BLE notification.
+  if (millis() - lastBatteryPrintMs > BATTERY_PRINT_MS) {
+    lastBatteryPrintMs = millis();
+
+    float batteryVoltage = readBatteryVoltage();
+    Serial.print("Battery voltage: ");
+    Serial.print(batteryVoltage, 2);
+    Serial.println(" V");
+
+    if (batteryCharacteristic != nullptr) {
+      float voltage = batteryVoltage;
+      batteryCharacteristic->setValue(reinterpret_cast<uint8_t *>(&voltage), sizeof(voltage));
+      batteryCharacteristic->notify();
+    }
+  }
+
   delay(10);
 }

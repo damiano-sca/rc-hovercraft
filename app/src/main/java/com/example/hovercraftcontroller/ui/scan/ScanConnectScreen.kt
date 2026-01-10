@@ -57,6 +57,8 @@ import com.example.hovercraftcontroller.ble.BleDevice
 import com.example.hovercraftcontroller.ble.ConnectionState
 import com.example.hovercraftcontroller.ble.ScanStatus
 
+private const val TARGET_DEVICE_NAME = "Wobble Wagon"
+
 @Composable
 fun ScanConnectRoute(
     onContinue: () -> Unit = {},
@@ -200,7 +202,8 @@ private fun HeaderSection(state: ScanConnectUiState, onOpenSettings: () -> Unit)
         ) {
             Text(
                 text = "Scan & Connect",
-                style = MaterialTheme.typography.headlineMedium
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
             IconButton(onClick = onOpenSettings) {
                 Icon(
@@ -334,6 +337,7 @@ private fun DeviceList(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        val filteredDevices = state.devices.filter { it.name == TARGET_DEVICE_NAME }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -342,7 +346,7 @@ private fun DeviceList(
             Text(text = "Devices", style = MaterialTheme.typography.titleMedium)
         }
 
-        if (state.devices.isEmpty()) {
+        if (filteredDevices.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize()) {
                 EmptyState()
             }
@@ -351,7 +355,7 @@ private fun DeviceList(
                 modifier = Modifier.weight(1f, fill = true),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(state.devices, key = { it.address }) { device ->
+                items(filteredDevices, key = { it.address }) { device ->
                     DeviceRow(
                         device = device,
                         connectionState = state.connectionState,
@@ -429,7 +433,8 @@ private fun DeviceRow(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = device.name,
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
